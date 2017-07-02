@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	fi,err := os.Open("qrcode.png")
+	fi,err := os.Open("qrcode2.png")
 	if !check(err){
 		return
 	}
@@ -96,20 +96,25 @@ func main() {
 		}
 	}
 	for i,pattern := range(positionDetectionPattern){
-		exportgroups(size,pattern,"positionDetectionPattern"+strconv.FormatInt(i,10))
+		exportgroups(size,pattern,"positionDetectionPattern"+strconv.FormatInt(int64(i),10))
 	}
 }
 
 func PositionDetectionPattern(bukonggroup,konggroup []Pos)bool{
 	buminx,bumaxx,buminy,bumaxy := Rectangle(bukonggroup)
 	minx,maxx,miny,maxy := Rectangle(konggroup)
-	if buminx > minx && bumaxx >minx &&
+	if !(buminx > minx && bumaxx >minx &&
 	   buminx < maxx && bumaxx < maxx &&
 	   buminy > miny && bumaxy >miny &&
-	   buminy < maxy && bumaxy < maxy{
-		return true
+	   buminy < maxy && bumaxy < maxy){
+		return false
 	}
-	return false
+	kongcenter := centerpoint(konggroup)
+	if !(kongcenter.X > buminx && kongcenter.X < bumaxx &&
+	   kongcenter.Y > buminy && kongcenter.Y < bumaxy){
+		return false
+	}
+	return true
 }
 
 func Rectangle(group []Pos)(minx,maxx,miny,maxy int){
