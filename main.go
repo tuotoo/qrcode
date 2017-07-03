@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	fi,err := os.Open("qrcode2.png")
+	fi,err := os.Open("qrcode1.png")
 	if !check(err){
 		return
 	}
@@ -53,9 +53,7 @@ func main() {
 		delete(m,pos)
 		groups = append(groups, SplitGroup(m,pos))
 	}
-	//for _,group := range(groups){
-	//	//fmt.Println(group)
-	//}
+	//计算分组
 	c := 0
 	for _,group := range(groups){
 		fmt.Println(len(group))
@@ -85,19 +83,35 @@ func main() {
 	fmt.Println("kong",len(kong))
 	fmt.Println("bukong",len(bukong))
 	fmt.Println(bukong)
-	exporteverygroup(size,kong,"kong")
-	exporteverygroup(size,bukong,"bukong")
-	positionDetectionPattern := [][][]Pos{}
+	//exporteverygroup(size,kong,"kong")
+	//exporteverygroup(size,bukong,"bukong")
+	positionDetectionPatterns := [][][]Pos{}
 	for _,bukonggroup := range(bukong){
 		for _,konggroup := range(kong){
 			if PositionDetectionPattern(bukonggroup,konggroup){
-				positionDetectionPattern = append(positionDetectionPattern,[][]Pos{bukonggroup,konggroup})
+				positionDetectionPatterns = append(positionDetectionPatterns,[][]Pos{bukonggroup,konggroup})
 			}
 		}
 	}
-	for i,pattern := range(positionDetectionPattern){
+	for i,pattern := range(positionDetectionPatterns){
 		exportgroups(size,pattern,"positionDetectionPattern"+strconv.FormatInt(int64(i),10))
 	}
+	linewidth := LineWidth(positionDetectionPatterns)
+	fmt.Println(linewidth)
+}
+
+func LineWidth(positionDetectionPatterns [][][]Pos)int{
+	sumwidth := 0
+	for _,positionDetectionPattern := range(positionDetectionPatterns){
+		for _,group := range(positionDetectionPattern){
+			minx,maxx,miny,maxy := Rectangle(group)
+			sumwidth += maxx - minx+1
+			sumwidth += maxy - miny+1
+			fmt.Println(maxx - minx,maxy - miny)
+		}
+	}
+	fmt.Println(sumwidth,60,sumwidth/60)
+	return sumwidth/60
 }
 
 func PositionDetectionPattern(bukonggroup,konggroup []Pos)bool{
