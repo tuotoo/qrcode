@@ -28,25 +28,77 @@ type PosGroup struct {
 }
 
 type Matrix struct {
-	Points   [][]bool
+	Points [][]bool
 }
 
-func (m *Matrix)At(x,y int)bool{
-	t:=0
-	f:=0
-	for i:=-1;i<2;i++{
-		for j:=-1;j<2;j++{
-			if m.Points[y+i][x+j]{
-				t +=1
-			}else{
-				f +=1
+func (m *Matrix)At(x, y int) bool {
+	t := 0
+	f := 0
+	for i := -1; i < 2; i++ {
+		for j := -1; j < 2; j++ {
+			if m.Points[y + i][x + j] {
+				t += 1
+			} else {
+				f += 1
 			}
 		}
 	}
-	if t>f{
+	if t > f {
 		return true
 	}
 	return false
+}
+
+func (m *Matrix)FormatInfo() {
+	fi1 := []Pos{
+		{0,8},{1,8},{2,8},{3,8},{4,8},{5,8},{7,8},{8,8},
+		{8,7},{8,5},{8,4},{8,3},{8,2},{8,1},{8,0},
+	}
+	maskedfidata := m.GetBin(fi1)
+	unmaskfidata := maskedfidata ^ 0x5412
+	if bch(unmaskfidata) == 0 {
+		ErrorCorrectionLevel:= unmaskfidata >> 13
+		Mask := unmaskfidata >> 10 & 7
+
+		fmt.Printf("FormatInfo1: ErrorCorrectionLevel %b; Mask  %b\n",ErrorCorrectionLevel,Mask)
+		return
+	}
+	length := len(m.Points)
+	fi2 := []Pos{
+		{8,length-1},{8,length-2},{8,length-3},{8,length-4},{8,length-5},{8,length-6},{8,length-7},
+		{length-8,8},{length-7,8},{length-6,8},{length-5,8},{length-4,8},{length-3,8},{length-2,8},{length-1,8},
+	}
+	maskedfidata = m.GetBin(fi2)
+	unmaskfidata = maskedfidata ^ 0x5412
+	if bch(unmaskfidata) == 0 {
+		ErrorCorrectionLevel:= unmaskfidata >> 13
+		Mask := unmaskfidata >> 10 & 7
+
+		fmt.Printf("FormatInfo2: ErrorCorrectionLevel %b; Mask  %b\n",ErrorCorrectionLevel,Mask)
+		return
+	}
+}
+
+func (m *Matrix)GetBin(poss []Pos) int {
+	var fidata int
+	for _, pos := range (poss) {
+		if m.Points[pos.Y][pos.X] {
+			fidata = fidata << 1 + 1
+		} else {
+			fidata = fidata << 1
+		}
+	}
+	return fidata
+}
+
+func bch(org int)int{
+	var g int = 0x537
+	for i := 4; i > -1; i-- {
+		if org & (1 << (uint(i+10))) > 0 {
+			org ^= g << uint(i)
+		}
+	}
+	return org
 }
 
 func main() {
@@ -81,14 +133,14 @@ func main() {
 		for x := 0; x < width; x++ {
 			if pic.Pix[y * width + x] < fz {
 				m[Pos{X:x, Y:y}] = true
-				line = append(line,true)
-			}else{
-				line = append(line,false)
+				line = append(line, true)
+			} else {
+				line = append(line, false)
 			}
 		}
-		matrix.Points = append(matrix.Points,line)
+		matrix.Points = append(matrix.Points, line)
 	}
-	exportmatrix(size,matrix,"matrix")
+	exportmatrix(size, matrix, "matrix")
 
 	groups := [][]Pos{}
 	for pos, _ := range (m) {
@@ -124,7 +176,7 @@ func main() {
 	fmt.Println("bukong", len(bukong))
 	//exporteverygroup(size,kong,"kong")
 	//exporteverygroup(size,bukong,"bukong")
-	exportgroups(size,groups,"groups")
+	exportgroups(size, groups, "groups")
 	positionDetectionPatterns := [][][]Pos{}
 	for _, bukonggroup := range (bukong) {
 		for _, konggroup := range (kong) {
@@ -140,98 +192,97 @@ func main() {
 	fmt.Println(linewidth)
 	pdp := NewPositionDetectionPattern(positionDetectionPatterns)
 
+	fmt.Println("pdp.topleft.Center", pdp.topleft.Center)
 
-	fmt.Println("pdp.topleft.Center",pdp.topleft.Center)
+	fmt.Println("pdp.bottom.Center", pdp.bottom.Center)
 
-	fmt.Println("pdp.bottom.Center",pdp.bottom.Center)
-
-	fmt.Println("pdp.right.Center",pdp.right.Center)
-	topstart := &Pos{X:pdp.topleft.Center.X + (int(3.5*linewidth)+1),Y:pdp.topleft.Center.Y + int(3*linewidth)}
-	topend := &Pos{X:pdp.right.Center.X - (int(3.5*linewidth)+1),Y:pdp.right.Center.Y + int(3*linewidth)}
-	fmt.Println(topstart,topend)
-	topTimePattens :=Line(topstart, topend,matrix)
+	fmt.Println("pdp.right.Center", pdp.right.Center)
+	topstart := &Pos{X:pdp.topleft.Center.X + (int(3.5 * linewidth) + 1), Y:pdp.topleft.Center.Y + int(3 * linewidth)}
+	topend := &Pos{X:pdp.right.Center.X - (int(3.5 * linewidth) + 1), Y:pdp.right.Center.Y + int(3 * linewidth)}
+	fmt.Println(topstart, topend)
+	topTimePattens := Line(topstart, topend, matrix)
 	fmt.Println(topTimePattens)
-	topcl := centerlist(topTimePattens,topstart.X)
-	fmt.Println("topcl",topcl,len(topcl))
+	topcl := centerlist(topTimePattens, topstart.X)
+	fmt.Println("topcl", topcl, len(topcl))
 
-	leftstart := &Pos{X:pdp.topleft.Center.X + int(3*linewidth),Y:pdp.topleft.Center.Y +(int(3.5*linewidth)+1)}
-	leftend := &Pos{X:pdp.bottom.Center.X + int(3*linewidth),Y:pdp.bottom.Center.Y -(int(3.5*linewidth)+1)}
-	fmt.Println(leftstart,leftend)
-	leftTimePattens :=Line(leftstart, leftend,matrix)
+	leftstart := &Pos{X:pdp.topleft.Center.X + int(3 * linewidth), Y:pdp.topleft.Center.Y + (int(3.5 * linewidth) + 1)}
+	leftend := &Pos{X:pdp.bottom.Center.X + int(3 * linewidth), Y:pdp.bottom.Center.Y - (int(3.5 * linewidth) + 1)}
+	fmt.Println(leftstart, leftend)
+	leftTimePattens := Line(leftstart, leftend, matrix)
 	fmt.Println(leftTimePattens)
-	leftcl := centerlist(leftTimePattens,leftstart.Y)
-	fmt.Println("leftcl",leftcl,len(leftcl))
-
+	leftcl := centerlist(leftTimePattens, leftstart.Y)
+	fmt.Println("leftcl", leftcl, len(leftcl))
 
 	qrtopcl := []int{}
-	for i:= -4;i<=3;i++{
-		qrtopcl =append(qrtopcl,pdp.topleft.Center.X + int(float64(i)*linewidth))
+	for i := -3; i <= 3; i++ {
+		qrtopcl = append(qrtopcl, pdp.topleft.Center.X + int(float64(i) * linewidth))
 	}
-	qrtopcl = append(qrtopcl,topcl...)
-	for i:= -3;i<=4;i++{
-		qrtopcl =append(qrtopcl,pdp.right.Center.X + int(float64(i)*linewidth))
+	qrtopcl = append(qrtopcl, topcl...)
+	for i := -3; i <= 3; i++ {
+		qrtopcl = append(qrtopcl, pdp.right.Center.X + int(float64(i) * linewidth))
 	}
 
 	qrleftcl := []int{}
-	for i:= -4;i<=3;i++{
-		qrleftcl =append(qrleftcl,pdp.topleft.Center.Y + int(float64(i)*linewidth))
+	for i := -3; i <= 3; i++ {
+		qrleftcl = append(qrleftcl, pdp.topleft.Center.Y + int(float64(i) * linewidth))
 	}
-	qrleftcl = append(qrleftcl,leftcl...)
-	for i:= -3;i<=4;i++{
-		qrleftcl =append(qrleftcl,pdp.bottom.Center.Y + int(float64(i)*linewidth))
+	qrleftcl = append(qrleftcl, leftcl...)
+	for i := -3; i <= 3; i++ {
+		qrleftcl = append(qrleftcl, pdp.bottom.Center.Y + int(float64(i) * linewidth))
 	}
 
-	fmt.Println("qrtopcl",qrtopcl,len(qrtopcl))
-	fmt.Println("qrleftcl",qrleftcl,len(qrleftcl))
+	fmt.Println("qrtopcl", qrtopcl, len(qrtopcl))
+	fmt.Println("qrleftcl", qrleftcl, len(qrleftcl))
 
 	qrmatrix := new(Matrix)
-	for _,y := range(qrleftcl){
+	for _, y := range (qrleftcl) {
 		line := []bool{}
-		for _,x := range(qrtopcl){
-			line = append(line,matrix.At(x,y))
+		for _, x := range (qrtopcl) {
+			line = append(line, matrix.At(x, y))
 		}
-		qrmatrix.Points = append(qrmatrix.Points,line)
+		qrmatrix.Points = append(qrmatrix.Points, line)
 	}
-	exportmatrix(image.Rect(0,0,len(qrtopcl),len(qrleftcl)),qrmatrix,"bitmatrix")
+	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), qrmatrix, "bitmatrix")
+	qrmatrix.FormatInfo()
 }
 
-func Line(start,end *Pos,matrix *Matrix)(line []bool){
-	if math.Abs(float64(start.X - end.X)) > math.Abs(float64(start.Y-end.Y)){
-		length := (end.X-start.X )
-		if length > 0{
-			for i:=0;i<=length;i++{
-				k := float64(end.Y-start.Y)/float64(length)
-				x := start.X +i
-				y := start.Y + int(k*float64(i))
+func Line(start, end *Pos, matrix *Matrix) (line []bool) {
+	if math.Abs(float64(start.X - end.X)) > math.Abs(float64(start.Y - end.Y)) {
+		length := (end.X - start.X )
+		if length > 0 {
+			for i := 0; i <= length; i++ {
+				k := float64(end.Y - start.Y) / float64(length)
+				x := start.X + i
+				y := start.Y + int(k * float64(i))
 				//fmt.Println(x,y,matrix.Points[y][x])
-				line = append(line ,matrix.Points[y][x])
+				line = append(line, matrix.Points[y][x])
 			}
-		}else{
-			for i := 0;i >=length;i--{
-				k := float64(end.Y-start.Y)/float64(length)
-				x := start.X +i
-				y := start.Y + int(k*float64(i))
+		} else {
+			for i := 0; i >= length; i-- {
+				k := float64(end.Y - start.Y) / float64(length)
+				x := start.X + i
+				y := start.Y + int(k * float64(i))
 				//fmt.Println(x,y,matrix.Points[y][x])
-				line = append(line ,matrix.Points[y][x])
+				line = append(line, matrix.Points[y][x])
 			}
 		}
-	}else{
-		length := (end.Y-start.Y)
-		if length > 0{
-			for i:=0;i<=length;i++{
-				k := float64(end.X-start.X)/float64(length)
-				y := start.Y +i
-				x := start.X + int(k*float64(i))
+	} else {
+		length := (end.Y - start.Y)
+		if length > 0 {
+			for i := 0; i <= length; i++ {
+				k := float64(end.X - start.X) / float64(length)
+				y := start.Y + i
+				x := start.X + int(k * float64(i))
 				//fmt.Println(x,y,matrix.Points[y][x])
-				line = append(line ,matrix.Points[y][x])
+				line = append(line, matrix.Points[y][x])
 			}
-		}else{
-			for i := 0;i >=length;i--{
-				k := float64(end.X-start.X)/float64(length)
-				y := start.Y +i
-				x := start.X + int(k*float64(i))
+		} else {
+			for i := 0; i >= length; i-- {
+				k := float64(end.X - start.X) / float64(length)
+				y := start.Y + i
+				x := start.X + int(k * float64(i))
 				//fmt.Println(x,y,matrix.Points[y][x])
-				line = append(line ,matrix.Points[y][x])
+				line = append(line, matrix.Points[y][x])
 			}
 		}
 	}
@@ -239,19 +290,19 @@ func Line(start,end *Pos,matrix *Matrix)(line []bool){
 }
 
 // 标线
-func centerlist(line []bool,offset int)(li []int) {
+func centerlist(line []bool, offset int) (li []int) {
 	submap := map[int]int{}
 	value := line[0]
 	sublength := 0
-	for _,b := range(line){
-		if b ==value{
+	for _, b := range (line) {
+		if b == value {
 			sublength += 1
-		}else{
-			_,ok := submap[sublength]
-			if ok{
-				submap[sublength]+=1
-			}else{
-				submap[sublength]=1
+		} else {
+			_, ok := submap[sublength]
+			if ok {
+				submap[sublength] += 1
+			} else {
+				submap[sublength] = 1
 			}
 			value = b
 			sublength = 1
@@ -259,47 +310,47 @@ func centerlist(line []bool,offset int)(li []int) {
 	}
 	maxcountsublength := 0
 	var meansublength int
-	for k,v := range(submap){
-		if v > maxcountsublength{
+	for k, v := range (submap) {
+		if v > maxcountsublength {
 			maxcountsublength = v
 			meansublength = k
 		}
 	}
-	fmt.Println("meansublength",meansublength)
+	fmt.Println("meansublength", meansublength)
 	start := false
 	curvalue := false
 	curgroup := []int{}
-	for i,v :=range(line){
-		if v == false{
+	for i, v := range (line) {
+		if v == false {
 			start = true
 		}
 		if !start {
 			continue
 		}
-		if v != curvalue{
-			if len(curgroup)> meansublength/2 && len(curgroup)<meansublength + meansublength/2{
+		if v != curvalue {
+			if len(curgroup) > meansublength / 2 && len(curgroup) < meansublength + meansublength / 2 {
 				curvalue = v
 				mean := 0
-				for _,index := range(curgroup){
+				for _, index := range (curgroup) {
 					mean += index
 				}
-				li = append(li,mean/len(curgroup)+offset)
+				li = append(li, mean / len(curgroup) + offset)
 				curgroup = []int{}
-			}else{
-				curgroup = append(curgroup,i)
+			} else {
+				curgroup = append(curgroup, i)
 			}
-		}else{
-			curgroup = append(curgroup,i)
+		} else {
+			curgroup = append(curgroup, i)
 		}
 	}
-	if len(curgroup)> meansublength/2 && len(curgroup)<meansublength + meansublength/2{
+	if len(curgroup) > meansublength / 2 && len(curgroup) < meansublength + meansublength / 2 {
 		mean := 0
-		for _,index := range(curgroup){
+		for _, index := range (curgroup) {
 			mean += index
 		}
-		li = append(li,mean/len(curgroup)+offset)
+		li = append(li, mean / len(curgroup) + offset)
 	}
-	fmt.Println(offset,li)
+	fmt.Println(offset, li)
 	return li
 	// todo
 }
@@ -400,14 +451,14 @@ func exportgroup(size image.Rectangle, group []Pos, filename string) {
 	png.Encode(firesult, result)
 }
 
-func exportmatrix(size image.Rectangle, matrix *Matrix, filename string){
+func exportmatrix(size image.Rectangle, matrix *Matrix, filename string) {
 	result := image.NewGray(size)
-	for y,line := range(matrix.Points){
-		for x,value := range(line){
+	for y, line := range (matrix.Points) {
+		for x, value := range (line) {
 			var c color.Color
-			if value{
+			if value {
 				c = color.Black
-			}else{
+			} else {
 				c = color.White
 			}
 			result.Set(x, y, c)
@@ -546,7 +597,7 @@ type K struct {
 	K             float64
 }
 
-func NewPositionDetectionPattern(pdps [][][]Pos)*PositionDetectionPatterns {
+func NewPositionDetectionPattern(pdps [][][]Pos) *PositionDetectionPatterns {
 	if len(pdps) < 3 {
 		panic("缺少pdp")
 	}
@@ -557,7 +608,7 @@ func NewPositionDetectionPattern(pdps [][][]Pos)*PositionDetectionPatterns {
 	ks := []*K{}
 	for i, firstpdpgroup := range (pdpgroups) {
 		for j, lastpdpgroup := range (pdpgroups) {
-			if i==j{
+			if i == j {
 				continue
 			}
 			k := &K{FirstPosGroup:firstpdpgroup, LastPosGroup:lastpdpgroup}
@@ -565,19 +616,19 @@ func NewPositionDetectionPattern(pdps [][][]Pos)*PositionDetectionPatterns {
 			ks = append(ks, k)
 		}
 	}
-	fmt.Println("len(ks)",len(ks))
+	fmt.Println("len(ks)", len(ks))
 	var Offset float64 = 360
-	var KF,KL *K
-	for i,kf := range(ks){
-		for j,kl := range(ks){
-			if i==j{
+	var KF, KL *K
+	for i, kf := range (ks) {
+		for j, kl := range (ks) {
+			if i == j {
 				continue
 			}
-			if kf.FirstPosGroup != kl.FirstPosGroup{
+			if kf.FirstPosGroup != kl.FirstPosGroup {
 				continue
 			}
-			offset := IsVertical(kf,kl)
-			if offset < Offset{
+			offset := IsVertical(kf, kl)
+			if offset < Offset {
 				Offset = offset
 				KF = kf
 				KL = kl
@@ -585,8 +636,8 @@ func NewPositionDetectionPattern(pdps [][][]Pos)*PositionDetectionPatterns {
 		}
 	}
 	fmt.Println(Offset)
-	fmt.Println(KF.FirstPosGroup.Center,KF.LastPosGroup.Center,KF.K)
-	fmt.Println(KL.FirstPosGroup.Center,KL.LastPosGroup.Center,KL.K)
+	fmt.Println(KF.FirstPosGroup.Center, KF.LastPosGroup.Center, KF.K)
+	fmt.Println(KL.FirstPosGroup.Center, KL.LastPosGroup.Center, KL.K)
 	positionDetectionPatterns := new(PositionDetectionPatterns)
 	positionDetectionPatterns.topleft = KF.FirstPosGroup
 	positionDetectionPatterns.bottom = KL.LastPosGroup
@@ -601,7 +652,7 @@ func Radian(k *K) {
 
 func IsVertical(kf, kl *K) (offset float64) {
 	dk := kl.K - kf.K
-	offset = math.Abs(dk - math.Pi/2 )
+	offset = math.Abs(dk - math.Pi / 2)
 	return
 }
 
