@@ -10,6 +10,7 @@ import (
 	"image/color"
 	"strconv"
 	"math"
+	"github.com/astaxie/beego"
 )
 
 type PositionDetectionPatterns struct {
@@ -49,7 +50,7 @@ func (m *Matrix)At(x, y int) bool {
 	return false
 }
 
-func (m *Matrix)FormatInfo() {
+func (m *Matrix)FormatInfo()(ErrorCorrectionLevel,Mask int) {
 	fi1 := []Pos{
 		{0,8},{1,8},{2,8},{3,8},{4,8},{5,8},{7,8},{8,8},
 		{8,7},{8,5},{8,4},{8,3},{8,2},{8,1},{8,0},
@@ -57,8 +58,8 @@ func (m *Matrix)FormatInfo() {
 	maskedfidata := m.GetBin(fi1)
 	unmaskfidata := maskedfidata ^ 0x5412
 	if bch(unmaskfidata) == 0 {
-		ErrorCorrectionLevel:= unmaskfidata >> 13
-		Mask := unmaskfidata >> 10 & 7
+		ErrorCorrectionLevel= unmaskfidata >> 13
+		Mask = unmaskfidata >> 10 & 7
 
 		fmt.Printf("FormatInfo1: ErrorCorrectionLevel %b; Mask  %b\n",ErrorCorrectionLevel,Mask)
 		return
@@ -71,12 +72,13 @@ func (m *Matrix)FormatInfo() {
 	maskedfidata = m.GetBin(fi2)
 	unmaskfidata = maskedfidata ^ 0x5412
 	if bch(unmaskfidata) == 0 {
-		ErrorCorrectionLevel:= unmaskfidata >> 13
-		Mask := unmaskfidata >> 10 & 7
+		ErrorCorrectionLevel= unmaskfidata >> 13
+		Mask = unmaskfidata >> 10 & 7
 
 		fmt.Printf("FormatInfo2: ErrorCorrectionLevel %b; Mask  %b\n",ErrorCorrectionLevel,Mask)
 		return
 	}
+	panic("not found errorcorrectionlevel and mask")
 }
 
 func (m *Matrix)GetBin(poss []Pos) int {
@@ -243,7 +245,21 @@ func main() {
 		qrmatrix.Points = append(qrmatrix.Points, line)
 	}
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), qrmatrix, "bitmatrix")
-	qrmatrix.FormatInfo()
+	qrErrorCorrectionLevel,qrMask := qrmatrix.FormatInfo()
+	beego.Debug(qrErrorCorrectionLevel,qrMask)
+	maskfunc := MaskFunc(qrMask)
+	unmaskmatrix := new(Matrix)
+	for y,line := range(qrmatrix.Points){
+		l := []bool{}
+		for x,value := range(line){
+			l = append(l,maskfunc(x,y)!=value)
+		}
+		unmaskmatrix.Points = append(unmaskmatrix.Points,l)
+	}
+
+	fmt.Println(qrmatrix.Points[0])
+	fmt.Println(unmaskmatrix.Points[0])
+	exportmatrix(image.Rect(0,0,len(qrtopcl), len(qrleftcl)),unmaskmatrix,"unmaskmatrix")
 }
 
 func Line(start, end *Pos, matrix *Matrix) (line []bool) {
@@ -658,4 +674,45 @@ func IsVertical(kf, kl *K) (offset float64) {
 
 func check(err error) bool {
 	return utils.Check(err)
+}
+
+func MaskFunc(code int)func(x,y int)(bool){
+	fmt.Println(code)
+	switch code{
+	case 0://000
+		return func(x,y int)(bool){
+			return (x+y)%2 == 0
+		}
+	case 1://001
+		return func(x,y int)(bool){
+			return y%2 == 0
+		}
+	case 2://010
+		return func(x,y int)(bool){
+			return x%3 == 0
+		}
+	case 3://011
+		return func(x,y int)(bool){
+			return (x+y)%3 == 0
+		}
+	case 4:// 100
+		return func(x,y int)(bool){
+			return (y/2+x/3)%2 == 0
+		}
+	case 5:// 101
+		return func(x,y int)(bool){
+			return (x*y)%2+(x*y)%3 == 0
+		}
+	case 6:// 110
+		return func(x,y int)(bool){
+			return ((x*y)%2+(x*y)%3)%2 == 0
+		}
+	case 7:// 111
+		return func(x,y int)(bool){
+			return ((x+y)%2+(x*y)%3)%2 == 0
+		}
+	}
+	return func(x,y int)(bool){
+		return false
+	}
 }
