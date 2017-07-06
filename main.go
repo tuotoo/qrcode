@@ -93,6 +93,11 @@ func (m *Matrix)GetBin(poss []Pos) int {
 	return fidata
 }
 
+func (m *Matrix)Version()int{
+	width := len(m.Points)
+	return (width -21)/4+1
+}
+
 func bch(org int)int{
 	var g int = 0x537
 	for i := 4; i > -1; i-- {
@@ -260,6 +265,9 @@ func main() {
 	fmt.Println(qrmatrix.Points[0])
 	fmt.Println(unmaskmatrix.Points[0])
 	exportmatrix(image.Rect(0,0,len(qrtopcl), len(qrleftcl)),unmaskmatrix,"unmaskmatrix")
+	dataarea := unmaskmatrix.DataArea()
+	exportmatrix(image.Rect(0,0,len(qrtopcl), len(qrleftcl)),dataarea,"dataarea")
+
 }
 
 func Line(start, end *Pos, matrix *Matrix) (line []bool) {
@@ -715,4 +723,60 @@ func MaskFunc(code int)func(x,y int)(bool){
 	return func(x,y int)(bool){
 		return false
 	}
+}
+
+func (m *Matrix)DataArea()*Matrix{
+	da := new(Matrix)
+	width := len(m.Points)
+	maxpos := width-1
+	for _,line:=range(m.Points){
+		l := []bool{}
+		for range(line){
+			l = append(l,true)
+		}
+		da.Points = append(da.Points,l)
+	}
+	//定位标记
+	for y:=0;y<9;y++{
+		for x:=0;x<9;x++{
+			da.Points[y][x]=false       //左上
+		}
+	}
+	for y:=0;y<9;y++{
+		for x:=0;x<8;x++{
+			da.Points[y][maxpos-x]=false //右上
+		}
+	}
+	for y:=0;y<8;y++{
+		for x:=0;x<9;x++{
+			da.Points[maxpos-y][x]=false //左下
+		}
+	}
+	for i :=0; i <width; i++{
+		da.Points[6][i]=false
+		da.Points[i][6]=false
+	}
+	var Alignments = []Pos{}
+	version :=  da.Version()
+	switch {
+	case version >0 && version <7:
+		Alignments = []Pos{{maxpos-6,maxpos-6}}
+	case version >=7:
+		middle := maxpos/2
+		Alignments = []Pos{{maxpos-6,maxpos-6},
+			{maxpos-6,middle},
+			{middle,maxpos-6},
+			{middle,middle},
+			{6,middle},
+			{middle,6},
+		}
+	}
+	for _,Alignment :=range(Alignments){
+		for y:=Alignment.Y-1;y<=Alignment.Y+1;y++{
+			for x:=Alignment.X-1;x<=Alignment.X+1;x++{
+				da.Points[y][x] = false
+			}
+		}
+	}
+	return da
 }
