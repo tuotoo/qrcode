@@ -778,5 +778,13 @@ func (m *Matrix)DataArea()*Matrix{
 			}
 		}
 	}
+	if version >= 7{
+		for i:=maxpos-8;i<maxpos-11;i++{
+			for j:=0;j<6;j++{
+				da.Points[i][j]=false
+				da.Points[j][i]=false
+			}
+		}
+	}
 	return da
 }
