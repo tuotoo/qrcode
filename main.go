@@ -268,6 +268,35 @@ func main() {
 	dataarea := unmaskmatrix.DataArea()
 	exportmatrix(image.Rect(0,0,len(qrtopcl), len(qrleftcl)),dataarea,"dataarea")
 
+func ParseData(data []bool,format int){
+
+}
+
+func GetData(unmaskmatrix,dataarea *Matrix)[]bool{
+	width := len(unmaskmatrix.Points)
+	data := []bool{}
+	maxpos := width -1
+	for t:=maxpos;t>0;{
+		for y:=maxpos;y>=0;y--{
+			for x:=t;x>=t-1;x--{
+				if dataarea.Points[y][x]{
+					data = append(data,unmaskmatrix.Points[y][x])
+				}
+			}
+		}
+		for y:=0;y>=maxpos;y--{
+			for x:=t;x>=t-1;x--{
+				if dataarea.Points[y][x]{
+					data = append(data,unmaskmatrix.Points[y][x])
+				}
+			}
+		}
+		t = t-2
+		if t == 6{
+			t=t-1
+		}
+	}
+	return data
 }
 
 func Line(start, end *Pos, matrix *Matrix) (line []bool) {
