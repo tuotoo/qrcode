@@ -250,23 +250,25 @@ func main() {
 		qrmatrix.Points = append(qrmatrix.Points, line)
 	}
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), qrmatrix, "bitmatrix")
-	qrErrorCorrectionLevel,qrMask := qrmatrix.FormatInfo()
-	beego.Debug(qrErrorCorrectionLevel,qrMask)
+	qrErrorCorrectionLevel, qrMask := qrmatrix.FormatInfo()
+	beego.Debug(qrErrorCorrectionLevel, qrMask)
 	maskfunc := MaskFunc(qrMask)
 	unmaskmatrix := new(Matrix)
-	for y,line := range(qrmatrix.Points){
+	for y, line := range (qrmatrix.Points) {
 		l := []bool{}
-		for x,value := range(line){
-			l = append(l,maskfunc(x,y)!=value)
+		for x, value := range (line) {
+			l = append(l, maskfunc(x, y) != value)
 		}
-		unmaskmatrix.Points = append(unmaskmatrix.Points,l)
+		unmaskmatrix.Points = append(unmaskmatrix.Points, l)
 	}
 
 	fmt.Println(qrmatrix.Points[0])
 	fmt.Println(unmaskmatrix.Points[0])
-	exportmatrix(image.Rect(0,0,len(qrtopcl), len(qrleftcl)),unmaskmatrix,"unmaskmatrix")
+	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), unmaskmatrix, "unmaskmatrix")
 	dataarea := unmaskmatrix.DataArea()
-	exportmatrix(image.Rect(0,0,len(qrtopcl), len(qrleftcl)),dataarea,"dataarea")
+	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), dataarea, "dataarea")
+	fmt.Println(GetData(unmaskmatrix,dataarea))
+}
 
 func ParseData(data []bool,format int){
 
