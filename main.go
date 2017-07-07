@@ -81,6 +81,7 @@ func (m *Matrix)FormatInfo()(ErrorCorrectionLevel,Mask int) {
 	panic("not found errorcorrectionlevel and mask")
 }
 
+
 func (m *Matrix)GetBin(poss []Pos) int {
 	var fidata int
 	for _, pos := range (poss) {
@@ -109,7 +110,7 @@ func bch(org int)int{
 }
 
 func main() {
-	fi, err := os.Open("qrcode3.png")
+	fi, err := os.Open("qrcode5.png")
 	if !check(err) {
 		return
 	}
@@ -132,7 +133,8 @@ func main() {
 			zft[pic.Pix[idx]]++    //image对像有一个Pix属性，它是一个slice，里面保存的是所有像素的数据。
 		}
 	}
-	fz := uint8(GetOSTUThreshold(zft))
+	var fz uint8 = 128 //uint8(GetOSTUThreshold(zft))
+	fmt.Println("fz",fz)
 	var m = map[Pos]bool{}
 	matrix := new(Matrix)
 	for y := 0; y < height; y++ {
@@ -267,11 +269,83 @@ func main() {
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), unmaskmatrix, "unmaskmatrix")
 	dataarea := unmaskmatrix.DataArea()
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), dataarea, "dataarea")
-	fmt.Println(GetData(unmaskmatrix,dataarea))
+
+	fmt.Println(parseblock(qrmatrix,GetData(unmaskmatrix,dataarea)))
 }
 
-func ParseData(data []bool,format int){
 
+func parseblock(m *Matrix,data []bool)([]bool,[]bool){
+	version := m.Version()
+	level,_ := m.FormatInfo()
+	var qrcodeversion qrCodeVersion
+	for _,qrcodeVersion := range(Versions){
+		if qrcodeVersion.level == RecoveryLevel(level) && qrcodeVersion.version == version{
+			qrcodeversion = qrcodeVersion
+		}
+	}
+	fmt.Printf("qrcodeVersion:%#v\n",qrcodeversion)
+
+
+	dataBlocks := [][]bool{}
+	for _,block := range(qrcodeversion.block){
+		for i:=0;i<block.numBlocks;i++{
+			dataBlocks = append(dataBlocks,[]bool{})
+		}
+	}
+	for {
+		leftlength := len(data)
+		no := 0
+		for _,block := range(qrcodeversion.block){
+			for i:=0;i<block.numBlocks;i++{
+				if len(dataBlocks[no])<block.numDataCodewords*8{
+					dataBlocks[no] = append(dataBlocks[no],data[0:8]...)
+					data = data[8:]
+				}
+				no += 1
+			}
+		}
+		if leftlength == len(data){
+			break
+		}
+	}
+	datacode := []bool{}
+	for _,block := range(dataBlocks){
+		datacode = append(datacode,block...)
+	}
+
+
+
+
+	errorBlocks := [][]bool{}
+	for _,block := range(qrcodeversion.block){
+		for i:=0;i<block.numBlocks;i++{
+			errorBlocks = append(errorBlocks,[]bool{})
+		}
+	}
+	for {
+		leftlength := len(data)
+		no := 0
+		for _, block := range (qrcodeversion.block) {
+			for i := 0; i < block.numBlocks; i++ {
+				if len(errorBlocks[no]) < (block.numCodewords - block.numDataCodewords) * 8 {
+					errorBlocks[no] = append(errorBlocks[no], data[:8]...)
+					if len(data)>8{
+						data = data[8:]
+					}
+				}
+				no += 1
+			}
+		}
+		if leftlength == len(data){
+			break
+		}
+	}
+	errorcode := []bool{}
+	for _,block := range(errorBlocks){
+		errorcode = append(errorcode,block...)
+	}
+
+	return  datacode,errorcode
 }
 
 func GetData(unmaskmatrix,dataarea *Matrix)[]bool{
