@@ -1,2 +1,3 @@
-# qrcode
-qrcode reader by golang
+# qrcode decoder by golang
+
+The project is being developed
