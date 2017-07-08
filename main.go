@@ -110,7 +110,7 @@ func bch(org int)int{
 }
 
 func main() {
-	fi, err := os.Open("qrcode5.png")
+	fi, err := os.Open("qrcode3.png")
 	if !check(err) {
 		return
 	}
@@ -269,10 +269,46 @@ func main() {
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), unmaskmatrix, "unmaskmatrix")
 	dataarea := unmaskmatrix.DataArea()
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), dataarea, "dataarea")
-
-	fmt.Println(parseblock(qrmatrix,GetData(unmaskmatrix,dataarea)))
+	datacode,errorcode := parseblock(qrmatrix,GetData(unmaskmatrix,dataarea))
+	fmt.Println(datacode,errorcode)
+	fmt.Println(string(bits2bytes(datacode)))
 }
 
+func bits2bytes(datacode []bool)[]byte{
+	format := bit2int(datacode[0:4])
+	fmt.Println(format)
+	length := bit2int(datacode[4:12])
+	datacode = datacode[12:length]
+	result := []byte{}
+	for i:=0;i<length*8;{
+		result = append(result,bit2byte(datacode[i:i+8]))
+		i += 8
+	}
+	return result
+}
+
+func bit2int(bits []bool)int{
+	g := 0
+	for _,i := range(bits){
+		g = g<<1
+		if i{
+			g += 1
+		}
+	}
+	return g
+}
+
+
+func bit2byte(bits []bool)byte{
+	var g uint8
+	for _,i := range(bits){
+		g = g<<1
+		if i{
+			g += 1
+		}
+	}
+	return byte(g)
+}
 
 func parseblock(m *Matrix,data []bool)([]bool,[]bool){
 	version := m.Version()
