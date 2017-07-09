@@ -25,7 +25,6 @@ const (
 	Highest
 	// Level Q: 25% error recovery.0b11
 	High
-
 )
 
 // qrCodeVersion describes the data length and encoding order of a single QR
@@ -33,18 +32,18 @@ const (
 // possible qrCodeVersion structures.
 type qrCodeVersion struct {
 	// Version number (1-40 inclusive).
-	version int
+	version          int
 
 	// Error recovery level.
-	level RecoveryLevel
+	level            RecoveryLevel
 
-	dataEncoderType dataEncoderType
+	dataEncoderType  dataEncoderType
 
 	// Encoded data can be split into multiple blocks. Each block contains data
 	// and error recovery bytes.
 	//
 	// Larger QR Codes contain more blocks.
-	block []block
+	block            []block
 
 	// Number of bits required to pad the combined data & error correction bit
 	// stream up to the symbol's full capacity.
@@ -52,10 +51,10 @@ type qrCodeVersion struct {
 }
 
 type block struct {
-	numBlocks int
+	numBlocks        int
 
 	// Total codewords (numCodewords == numErrorCodewords+numDataCodewords).
-	numCodewords int
+	numCodewords     int
 
 	// Number of data codewords.
 	numDataCodewords int
@@ -2785,3 +2784,68 @@ var (
 		},
 	}
 )
+
+
+
+// A dataEncoder encodes data for a particular QR Code version.
+type dataEncoder struct {
+	// Minimum & maximum versions supported.
+	minVersion                   int
+	maxVersion                   int
+
+	// Character count lengths.
+	numNumericCharCountBits      int
+	numAlphanumericCharCountBits int
+	numByteCharCountBits         int
+}
+
+var dataEncoderTypeMap = map[dataEncoderType]*dataEncoder{
+	dataEncoderType1To9: &dataEncoder{
+		minVersion:                   1,
+		maxVersion:                   9,
+		numNumericCharCountBits:      10,
+		numAlphanumericCharCountBits: 9,
+		numByteCharCountBits:         8,
+	},
+	dataEncoderType10To26: &dataEncoder{
+		minVersion:                   10,
+		maxVersion:                   26,
+		numNumericCharCountBits:      12,
+		numAlphanumericCharCountBits: 11,
+		numByteCharCountBits:         16,
+	},
+	dataEncoderType27To40:&dataEncoder{
+		minVersion:                   27,
+		maxVersion:                   40,
+		numNumericCharCountBits:      14,
+		numAlphanumericCharCountBits: 13,
+		numByteCharCountBits:         16,
+	},
+}
+
+func GetDataEncoder(version int)*dataEncoder{
+	switch {
+	case version >=1 && version <= 9:
+		return dataEncoderTypeMap[dataEncoderType1To9]
+	case version >=10 && version <=26:
+		return dataEncoderTypeMap[dataEncoderType10To26]
+	case version >=27 && version <=40:
+		return dataEncoderTypeMap[dataEncoderType27To40]
+	default:
+		panic("version not found")
+	}
+}
+
+func (de *dataEncoder)CharCountBits(format int)int{
+	switch format{
+	case 1:
+		return de.numNumericCharCountBits
+	case 2:
+		return de.numAlphanumericCharCountBits
+	case 4:
+		return de.numByteCharCountBits
+	default:
+		panic("format not found")
+	}
+	return 0
+}

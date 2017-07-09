@@ -110,7 +110,7 @@ func bch(org int)int{
 }
 
 func main() {
-	fi, err := os.Open("qrcode5.png")
+	fi, err := os.Open("qrcode7.png")
 	if !check(err) {
 		return
 	}
@@ -271,16 +271,16 @@ func main() {
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), dataarea, "dataarea")
 	datacode,errorcode := parseblock(qrmatrix,GetData(unmaskmatrix,dataarea))
 	fmt.Println(datacode,errorcode)
-	bt := bits2bytes(datacode)
+	bt := bits2bytes(datacode,unmaskmatrix.Version())
 	fmt.Println(bt)
 	fmt.Println(string(bt))
 }
 
-func bits2bytes(datacode []bool)[]byte{
+func bits2bytes(datacode []bool,version int)[]byte{
 	format := bit2int(datacode[0:4])
 	fmt.Println("format",format)
 	fmt.Println("datacode",datacode)
-	length := bit2int(datacode[4:])
+	length := bit2int(datacode[4:4+GetDataEncoder(version).CharCountBits(format)])
 	fmt.Println("length",length)
 	datacode = datacode[12:length*8+12]
 	result := []byte{}
@@ -301,7 +301,6 @@ func bit2int(bits []bool)int{
 	}
 	return g
 }
-
 
 func bit2byte(bits []bool)byte{
 	var g uint8
