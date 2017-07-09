@@ -2845,6 +2845,7 @@ func (de *dataEncoder)CharCountBits(format int)int{
 	case 4:
 		return de.numByteCharCountBits
 	default:
+		logger.Println("format",format)
 		panic("format not found")
 	}
 	return 0

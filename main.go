@@ -6,12 +6,15 @@ import (
 	"git.spiritframe.com/tuotoo/utils"
 	"image"
 	"image/draw"
-	"fmt"
 	"image/color"
 	"strconv"
 	"math"
-	"github.com/astaxie/beego"
+	"log"
+	"fmt"
 )
+
+
+var logger =log.New(os.Stdout,"\r\n",log.Ldate|log.Ltime|log.Llongfile)
 
 type PositionDetectionPatterns struct {
 	topleft *PosGroup
@@ -61,7 +64,7 @@ func (m *Matrix)FormatInfo()(ErrorCorrectionLevel,Mask int) {
 		ErrorCorrectionLevel= unmaskfidata >> 13
 		Mask = unmaskfidata >> 10 & 7
 
-		fmt.Printf("FormatInfo1: ErrorCorrectionLevel %b; Mask  %b\n",ErrorCorrectionLevel,Mask)
+		logger.Printf("FormatInfo1: ErrorCorrectionLevel %b; Mask  %b\n",ErrorCorrectionLevel,Mask)
 		return
 	}
 	length := len(m.Points)
@@ -75,7 +78,7 @@ func (m *Matrix)FormatInfo()(ErrorCorrectionLevel,Mask int) {
 		ErrorCorrectionLevel= unmaskfidata >> 13
 		Mask = unmaskfidata >> 10 & 7
 
-		fmt.Printf("FormatInfo2: ErrorCorrectionLevel %b; Mask  %b\n",ErrorCorrectionLevel,Mask)
+		logger.Printf("FormatInfo2: ErrorCorrectionLevel %b; Mask  %b\n",ErrorCorrectionLevel,Mask)
 		return
 	}
 	panic("not found errorcorrectionlevel and mask")
@@ -110,7 +113,7 @@ func bch(org int)int{
 }
 
 func main() {
-	fi, err := os.Open("qrcode7.png")
+	fi, err := os.Open("qrcode9.png")
 	if !check(err) {
 		return
 	}
@@ -134,7 +137,7 @@ func main() {
 		}
 	}
 	var fz uint8 = 128 //uint8(GetOSTUThreshold(zft))
-	fmt.Println("fz",fz)
+	logger.Println("fz",fz)
 	var m = map[Pos]bool{}
 	matrix := new(Matrix)
 	for y := 0; y < height; y++ {
@@ -180,9 +183,9 @@ func main() {
 			bukong = append(bukong, group)
 		}
 	}
-	fmt.Println("groups", len(groups))
-	fmt.Println("kong", len(kong))
-	fmt.Println("bukong", len(bukong))
+	logger.Println("groups", len(groups))
+	logger.Println("kong", len(kong))
+	logger.Println("bukong", len(bukong))
 	//exporteverygroup(size,kong,"kong")
 	//exporteverygroup(size,bukong,"bukong")
 	exportgroups(size, groups, "groups")
@@ -198,29 +201,29 @@ func main() {
 		exportgroups(size, pattern, "positionDetectionPattern" + strconv.FormatInt(int64(i), 10))
 	}
 	linewidth := LineWidth(positionDetectionPatterns)
-	fmt.Println(linewidth)
+	logger.Println(linewidth)
 	pdp := NewPositionDetectionPattern(positionDetectionPatterns)
 
-	fmt.Println("pdp.topleft.Center", pdp.topleft.Center)
+	logger.Println("pdp.topleft.Center", pdp.topleft.Center)
 
-	fmt.Println("pdp.bottom.Center", pdp.bottom.Center)
+	logger.Println("pdp.bottom.Center", pdp.bottom.Center)
 
-	fmt.Println("pdp.right.Center", pdp.right.Center)
+	logger.Println("pdp.right.Center", pdp.right.Center)
 	topstart := &Pos{X:pdp.topleft.Center.X + (int(3.5 * linewidth) + 1), Y:pdp.topleft.Center.Y + int(3 * linewidth)}
 	topend := &Pos{X:pdp.right.Center.X - (int(3.5 * linewidth) + 1), Y:pdp.right.Center.Y + int(3 * linewidth)}
-	fmt.Println(topstart, topend)
+	logger.Println(topstart, topend)
 	topTimePattens := Line(topstart, topend, matrix)
-	fmt.Println(topTimePattens)
+	logger.Println(topTimePattens)
 	topcl := centerlist(topTimePattens, topstart.X)
-	fmt.Println("topcl", topcl, len(topcl))
+	logger.Println("topcl", topcl, len(topcl))
 
 	leftstart := &Pos{X:pdp.topleft.Center.X + int(3 * linewidth), Y:pdp.topleft.Center.Y + (int(3.5 * linewidth) + 1)}
 	leftend := &Pos{X:pdp.bottom.Center.X + int(3 * linewidth), Y:pdp.bottom.Center.Y - (int(3.5 * linewidth) + 1)}
-	fmt.Println(leftstart, leftend)
+	logger.Println(leftstart, leftend)
 	leftTimePattens := Line(leftstart, leftend, matrix)
-	fmt.Println(leftTimePattens)
+	logger.Println(leftTimePattens)
 	leftcl := centerlist(leftTimePattens, leftstart.Y)
-	fmt.Println("leftcl", leftcl, len(leftcl))
+	logger.Println("leftcl", leftcl, len(leftcl))
 
 	qrtopcl := []int{}
 	for i := -3; i <= 3; i++ {
@@ -240,8 +243,8 @@ func main() {
 		qrleftcl = append(qrleftcl, pdp.bottom.Center.Y + int(float64(i) * linewidth))
 	}
 
-	fmt.Println("qrtopcl", qrtopcl, len(qrtopcl))
-	fmt.Println("qrleftcl", qrleftcl, len(qrleftcl))
+	logger.Println("qrtopcl", qrtopcl, len(qrtopcl))
+	logger.Println("qrleftcl", qrleftcl, len(qrleftcl))
 
 	qrmatrix := new(Matrix)
 	for _, y := range (qrleftcl) {
@@ -253,7 +256,7 @@ func main() {
 	}
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), qrmatrix, "bitmatrix")
 	qrErrorCorrectionLevel, qrMask := qrmatrix.FormatInfo()
-	beego.Debug(qrErrorCorrectionLevel, qrMask)
+	logger.Println("qrErrorCorrectionLevel, qrMask",qrErrorCorrectionLevel, qrMask)
 	maskfunc := MaskFunc(qrMask)
 	unmaskmatrix := new(Matrix)
 	for y, line := range (qrmatrix.Points) {
@@ -264,24 +267,27 @@ func main() {
 		unmaskmatrix.Points = append(unmaskmatrix.Points, l)
 	}
 
-	fmt.Println(qrmatrix.Points[0])
-	fmt.Println(unmaskmatrix.Points[0])
+	logger.Println(qrmatrix.Points[0])
+	logger.Println(unmaskmatrix.Points[0])
 	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), unmaskmatrix, "unmaskmatrix")
 	dataarea := unmaskmatrix.DataArea()
-	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), dataarea, "dataarea")
+	exportmatrix(image.Rect(0, 0, len(qrtopcl), len(qrleftcl)), dataarea, "mask")
+	//logger.Println(len(GetData(unmaskmatrix,dataarea)),GetData(unmaskmatrix,dataarea))
+	//logger.Println(len(bool2byte(GetData(unmaskmatrix,dataarea))),bool2byte(GetData(unmaskmatrix,dataarea)))
+	//logger.Println(StringByte(bool2byte(GetData(unmaskmatrix,dataarea))))
 	datacode,errorcode := parseblock(qrmatrix,GetData(unmaskmatrix,dataarea))
-	fmt.Println(datacode,errorcode)
+	logger.Println(datacode,errorcode)
 	bt := bits2bytes(datacode,unmaskmatrix.Version())
-	fmt.Println(bt)
-	fmt.Println(string(bt))
+	logger.Println(bt)
+	logger.Println(string(bt))
 }
 
 func bits2bytes(datacode []bool,version int)[]byte{
 	format := bit2int(datacode[0:4])
-	fmt.Println("format",format)
-	fmt.Println("datacode",datacode)
+	logger.Println("format",format)
+	logger.Println("datacode",datacode)
 	length := bit2int(datacode[4:4+GetDataEncoder(version).CharCountBits(format)])
-	fmt.Println("length",length)
+	logger.Println("length",length)
 	datacode = datacode[12:length*8+12]
 	result := []byte{}
 	for i:=0;i<length*8;{
@@ -291,6 +297,31 @@ func bits2bytes(datacode []bool,version int)[]byte{
 	return result
 }
 
+func StringByte(b []byte)string{
+	var bitString string
+	for i := 0; i < len(b)*8; i++ {
+		if (i % 8) == 0 {
+			bitString += " "
+		}
+
+		if (b[i/8] & (0x80 >> byte(i%8))) != 0 {
+			bitString += "1"
+		} else {
+			bitString += "0"
+		}
+	}
+
+	return fmt.Sprintf("numBits=%d, bits=%s", len(b)*8, bitString)
+}
+
+func bool2byte(datacode[]bool)[]byte{
+	result := []byte{}
+	for i:=0;i<len(datacode);{
+		result = append(result,bit2byte(datacode[i:i+8]))
+		i += 8
+	}
+	return result
+}
 func bit2int(bits []bool)int{
 	g := 0
 	for _,i := range(bits){
@@ -322,7 +353,7 @@ func parseblock(m *Matrix,data []bool)([]bool,[]bool){
 			qrcodeversion = qrcodeVersion
 		}
 	}
-	fmt.Printf("qrcodeVersion:%#v\n",qrcodeversion)
+	logger.Printf("qrcodeVersion:%#v\n",qrcodeversion)
 
 
 	dataBlocks := [][]bool{}
@@ -395,13 +426,7 @@ func GetData(unmaskmatrix,dataarea *Matrix)[]bool{
 		for y:=maxpos;y>=0;y--{
 			for x:=t;x>=t-1;x--{
 				if dataarea.Points[y][x]{
-					data = append(data,unmaskmatrix.Points[y][x])
-				}
-			}
-		}
-		for y:=0;y>=maxpos;y--{
-			for x:=t;x>=t-1;x--{
-				if dataarea.Points[y][x]{
+					logger.Println("y,x",y,x,unmaskmatrix.Points[y][x])
 					data = append(data,unmaskmatrix.Points[y][x])
 				}
 			}
@@ -410,6 +435,16 @@ func GetData(unmaskmatrix,dataarea *Matrix)[]bool{
 		if t == 6{
 			t=t-1
 		}
+		for y:=0;y<=maxpos;y++{
+			for x:=t;x>=t-1;x--{
+				//logger.Println("y,x",y,x)
+				if dataarea.Points[y][x]{
+					logger.Println("y,x",y,x,unmaskmatrix.Points[y][x])
+					data = append(data,unmaskmatrix.Points[y][x])
+				}
+			}
+		}
+		t = t-2
 	}
 	return data
 }
@@ -422,7 +457,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 				k := float64(end.Y - start.Y) / float64(length)
 				x := start.X + i
 				y := start.Y + int(k * float64(i))
-				//fmt.Println(x,y,matrix.Points[y][x])
+				//logger.Println(x,y,matrix.Points[y][x])
 				line = append(line, matrix.Points[y][x])
 			}
 		} else {
@@ -430,7 +465,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 				k := float64(end.Y - start.Y) / float64(length)
 				x := start.X + i
 				y := start.Y + int(k * float64(i))
-				//fmt.Println(x,y,matrix.Points[y][x])
+				//logger.Println(x,y,matrix.Points[y][x])
 				line = append(line, matrix.Points[y][x])
 			}
 		}
@@ -441,7 +476,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 				k := float64(end.X - start.X) / float64(length)
 				y := start.Y + i
 				x := start.X + int(k * float64(i))
-				//fmt.Println(x,y,matrix.Points[y][x])
+				//logger.Println(x,y,matrix.Points[y][x])
 				line = append(line, matrix.Points[y][x])
 			}
 		} else {
@@ -449,7 +484,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 				k := float64(end.X - start.X) / float64(length)
 				y := start.Y + i
 				x := start.X + int(k * float64(i))
-				//fmt.Println(x,y,matrix.Points[y][x])
+				//logger.Println(x,y,matrix.Points[y][x])
 				line = append(line, matrix.Points[y][x])
 			}
 		}
@@ -484,7 +519,7 @@ func centerlist(line []bool, offset int) (li []int) {
 			meansublength = k
 		}
 	}
-	fmt.Println("meansublength", meansublength)
+	logger.Println("meansublength", meansublength)
 	start := false
 	curvalue := false
 	curgroup := []int{}
@@ -518,7 +553,7 @@ func centerlist(line []bool, offset int) (li []int) {
 		}
 		li = append(li, mean / len(curgroup) + offset)
 	}
-	fmt.Println(offset, li)
+	logger.Println(offset, li)
 	return li
 	// todo
 }
@@ -530,10 +565,10 @@ func LineWidth(positionDetectionPatterns [][][]Pos) float64 {
 			minx, maxx, miny, maxy := Rectangle(group)
 			sumwidth += maxx - minx + 1
 			sumwidth += maxy - miny + 1
-			fmt.Println(maxx - minx, maxy - miny)
+			logger.Println(maxx - minx, maxy - miny)
 		}
 	}
-	fmt.Println(sumwidth, 60, float64(sumwidth) / 60)
+	logger.Println(sumwidth, 60, float64(sumwidth) / 60)
 	return float64(sumwidth) / 60
 }
 
@@ -784,7 +819,7 @@ func NewPositionDetectionPattern(pdps [][][]Pos) *PositionDetectionPatterns {
 			ks = append(ks, k)
 		}
 	}
-	fmt.Println("len(ks)", len(ks))
+	logger.Println("len(ks)", len(ks))
 	var Offset float64 = 360
 	var KF, KL *K
 	for i, kf := range (ks) {
@@ -803,9 +838,9 @@ func NewPositionDetectionPattern(pdps [][][]Pos) *PositionDetectionPatterns {
 			}
 		}
 	}
-	fmt.Println(Offset)
-	fmt.Println(KF.FirstPosGroup.Center, KF.LastPosGroup.Center, KF.K)
-	fmt.Println(KL.FirstPosGroup.Center, KL.LastPosGroup.Center, KL.K)
+	logger.Println(Offset)
+	logger.Println(KF.FirstPosGroup.Center, KF.LastPosGroup.Center, KF.K)
+	logger.Println(KL.FirstPosGroup.Center, KL.LastPosGroup.Center, KL.K)
 	positionDetectionPatterns := new(PositionDetectionPatterns)
 	positionDetectionPatterns.topleft = KF.FirstPosGroup
 	positionDetectionPatterns.bottom = KL.LastPosGroup
@@ -829,7 +864,7 @@ func check(err error) bool {
 }
 
 func MaskFunc(code int)func(x,y int)(bool){
-	fmt.Println(code)
+	logger.Println(code)
 	switch code{
 	case 0://000
 		return func(x,y int)(bool){
@@ -880,7 +915,8 @@ func (m *Matrix)DataArea()*Matrix{
 		}
 		da.Points = append(da.Points,l)
 	}
-	//定位标记
+	// Position Detection Pattern是定位图案，用于标记二维码的矩形大小。
+	// 这三个定位图案有白边叫Separators for Postion Detection Patterns。之所以三个而不是四个意思就是三个就可以标识一个矩形了。
 	for y:=0;y<9;y++{
 		for x:=0;x<9;x++{
 			da.Points[y][x]=false       //左上
@@ -896,14 +932,16 @@ func (m *Matrix)DataArea()*Matrix{
 			da.Points[maxpos-y][x]=false //左下
 		}
 	}
+	// Timing Patterns也是用于定位的。原因是二维码有40种尺寸，尺寸过大了后需要有根标准线，不然扫描的时候可能会扫歪了。
 	for i :=0; i <width; i++{
 		da.Points[6][i]=false
 		da.Points[i][6]=false
 	}
+	//
 	var Alignments = []Pos{}
 	version :=  da.Version()
 	switch {
-	case version >0 && version <7:
+	case version >1 && version <7:
 		Alignments = []Pos{{maxpos-6,maxpos-6}}
 	case version >=7:
 		middle := maxpos/2
@@ -922,6 +960,7 @@ func (m *Matrix)DataArea()*Matrix{
 			}
 		}
 	}
+	//Version Information 在 >= Version 7以上，需要预留两块3 x 6的区域存放一些版本信息。
 	if version >= 7{
 		for i:=maxpos-8;i<maxpos-11;i++{
 			for j:=0;j<6;j++{
