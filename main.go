@@ -111,7 +111,7 @@ func bch(org int) int {
 }
 
 func main() {
-	fi, err := os.Open("qrcode3.png")
+	fi, err := os.Open("qrcode10.png")
 	if !check(err) {
 		return
 	}
@@ -902,26 +902,18 @@ func (m *Matrix) DataArea() *Matrix {
 		da.Points[6][i] = false
 		da.Points[i][6] = false
 	}
-	//
-	var Alignments = []Pos{}
+	//Alignment Patterns 只有Version 2以上（包括Version2）的二维码需要这个东东，同样是为了定位用的。
 	version := da.Version()
-	switch {
-	case version > 1 && version < 7:
-		Alignments = []Pos{{maxpos - 6, maxpos - 6}}
-	case version >= 7:
-		middle := maxpos / 2
-		Alignments = []Pos{{maxpos - 6, maxpos - 6},
-			{maxpos - 6, middle},
-			{middle, maxpos - 6},
-			{middle, middle},
-			{6, middle},
-			{middle, 6},
-		}
-	}
-	for _, Alignment := range Alignments {
-		for y := Alignment.Y - 2; y <= Alignment.Y+2; y++ {
-			for x := Alignment.X - 2; x <= Alignment.X+2; x++ {
-				da.Points[y][x] = false
+	Alignments := AlignmentPatternCenter[version]
+	for _, AlignmentX := range Alignments {
+		for _, AlignmentY := range Alignments {
+			if (AlignmentX == 6 && AlignmentY == 6) || (maxpos-AlignmentX == 6 && AlignmentY == 6) || (AlignmentX == 6 && maxpos-AlignmentY == 6) {
+				continue
+			}
+			for y := AlignmentY - 2; y <= AlignmentY+2; y++ {
+				for x := AlignmentX - 2; x <= AlignmentX+2; x++ {
+					da.Points[y][x] = false
+				}
 			}
 		}
 	}
