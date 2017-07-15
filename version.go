@@ -1,5 +1,4 @@
-package main
-
+package qrcode
 
 // Error detection/recovery capacity.
 //
@@ -27,37 +26,37 @@ const (
 	High
 )
 
-// qrCodeVersion describes the data length and encoding order of a single QR
-// Code version. There are 40 versions numbers x 4 recovery levels == 160
-// possible qrCodeVersion structures.
-type qrCodeVersion struct {
+// QRcodeVersion describes the data length and encoding order of a single QR
+// Code Version. There are 40 versions numbers x 4 recovery levels == 160
+// possible QRcodeVersion structures.
+type QRcodeVersion struct {
 	// Version number (1-40 inclusive).
-	version          int
+	Version int
 
-	// Error recovery level.
-	level            RecoveryLevel
+	// Error recovery Level.
+	Level RecoveryLevel
 
-	dataEncoderType  dataEncoderType
+	DataEncoderType dataEncoderType
 
-	// Encoded data can be split into multiple blocks. Each block contains data
+	// Encoded data can be split into multiple blocks. Each Block contains data
 	// and error recovery bytes.
 	//
 	// Larger QR Codes contain more blocks.
-	block            []block
+	Block []Block
 
 	// Number of bits required to pad the combined data & error correction bit
 	// stream up to the symbol's full capacity.
-	numRemainderBits int
+	NumRemainderBits int
 }
 
-type block struct {
-	numBlocks        int
+type Block struct {
+	NumBlocks int
 
-	// Total codewords (numCodewords == numErrorCodewords+numDataCodewords).
-	numCodewords     int
+	// Total codewords (NumCodewords == numErrorCodewords+NumDataCodewords).
+	NumCodewords int
 
 	// Number of data codewords.
-	numDataCodewords int
+	NumDataCodewords int
 }
 
 var (
@@ -104,12 +103,12 @@ var (
 		{6, 26, 54, 82, 110, 138, 166},
 		{6, 30, 58, 86, 114, 142, 170},
 	}
-	Versions = []qrCodeVersion{
+	Versions = []QRcodeVersion{
 		{
 			1,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					26,
@@ -122,7 +121,7 @@ var (
 			1,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					26,
@@ -135,7 +134,7 @@ var (
 			1,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					26,
@@ -148,7 +147,7 @@ var (
 			1,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					26,
@@ -161,7 +160,7 @@ var (
 			2,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					44,
@@ -174,7 +173,7 @@ var (
 			2,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					44,
@@ -187,7 +186,7 @@ var (
 			2,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					44,
@@ -200,7 +199,7 @@ var (
 			2,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					44,
@@ -213,7 +212,7 @@ var (
 			3,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					70,
@@ -226,7 +225,7 @@ var (
 			3,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					70,
@@ -239,7 +238,7 @@ var (
 			3,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					35,
@@ -252,7 +251,7 @@ var (
 			3,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					35,
@@ -265,7 +264,7 @@ var (
 			4,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					100,
@@ -278,7 +277,7 @@ var (
 			4,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					50,
@@ -291,7 +290,7 @@ var (
 			4,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					50,
@@ -304,7 +303,7 @@ var (
 			4,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					25,
@@ -317,7 +316,7 @@ var (
 			5,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					1,
 					134,
@@ -330,7 +329,7 @@ var (
 			5,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					67,
@@ -343,7 +342,7 @@ var (
 			5,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					33,
@@ -361,7 +360,7 @@ var (
 			5,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					33,
@@ -379,7 +378,7 @@ var (
 			6,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					86,
@@ -392,7 +391,7 @@ var (
 			6,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					43,
@@ -405,7 +404,7 @@ var (
 			6,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					43,
@@ -418,7 +417,7 @@ var (
 			6,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					43,
@@ -431,7 +430,7 @@ var (
 			7,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					98,
@@ -444,7 +443,7 @@ var (
 			7,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					49,
@@ -457,7 +456,7 @@ var (
 			7,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					32,
@@ -475,7 +474,7 @@ var (
 			7,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					39,
@@ -493,7 +492,7 @@ var (
 			8,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					121,
@@ -506,7 +505,7 @@ var (
 			8,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					60,
@@ -524,7 +523,7 @@ var (
 			8,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					40,
@@ -542,7 +541,7 @@ var (
 			8,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					40,
@@ -560,7 +559,7 @@ var (
 			9,
 			Low,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					2,
 					146,
@@ -573,7 +572,7 @@ var (
 			9,
 			Medium,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					3,
 					58,
@@ -591,7 +590,7 @@ var (
 			9,
 			High,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					36,
@@ -609,7 +608,7 @@ var (
 			9,
 			Highest,
 			dataEncoderType1To9,
-			[]block{
+			[]Block{
 				{
 					4,
 					36,
@@ -627,7 +626,7 @@ var (
 			10,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					2,
 					86,
@@ -645,7 +644,7 @@ var (
 			10,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					69,
@@ -663,7 +662,7 @@ var (
 			10,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					6,
 					43,
@@ -681,7 +680,7 @@ var (
 			10,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					6,
 					43,
@@ -699,7 +698,7 @@ var (
 			11,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					101,
@@ -712,7 +711,7 @@ var (
 			11,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					1,
 					80,
@@ -730,7 +729,7 @@ var (
 			11,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					50,
@@ -748,7 +747,7 @@ var (
 			11,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					3,
 					36,
@@ -766,7 +765,7 @@ var (
 			12,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					2,
 					116,
@@ -784,7 +783,7 @@ var (
 			12,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					6,
 					58,
@@ -802,7 +801,7 @@ var (
 			12,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					46,
@@ -820,7 +819,7 @@ var (
 			12,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					7,
 					42,
@@ -838,7 +837,7 @@ var (
 			13,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					133,
@@ -851,7 +850,7 @@ var (
 			13,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					8,
 					59,
@@ -869,7 +868,7 @@ var (
 			13,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					8,
 					44,
@@ -887,7 +886,7 @@ var (
 			13,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					12,
 					33,
@@ -905,7 +904,7 @@ var (
 			14,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					3,
 					145,
@@ -923,7 +922,7 @@ var (
 			14,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					64,
@@ -941,7 +940,7 @@ var (
 			14,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					11,
 					36,
@@ -959,7 +958,7 @@ var (
 			14,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					11,
 					36,
@@ -977,7 +976,7 @@ var (
 			15,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					5,
 					109,
@@ -995,7 +994,7 @@ var (
 			15,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					5,
 					65,
@@ -1013,7 +1012,7 @@ var (
 			15,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					5,
 					54,
@@ -1031,7 +1030,7 @@ var (
 			15,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					11,
 					36,
@@ -1049,7 +1048,7 @@ var (
 			16,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					5,
 					122,
@@ -1067,7 +1066,7 @@ var (
 			16,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					7,
 					73,
@@ -1085,7 +1084,7 @@ var (
 			16,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					15,
 					43,
@@ -1103,7 +1102,7 @@ var (
 			16,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					3,
 					45,
@@ -1121,7 +1120,7 @@ var (
 			17,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					1,
 					135,
@@ -1139,7 +1138,7 @@ var (
 			17,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					10,
 					74,
@@ -1157,7 +1156,7 @@ var (
 			17,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					1,
 					50,
@@ -1175,7 +1174,7 @@ var (
 			17,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					2,
 					42,
@@ -1193,7 +1192,7 @@ var (
 			18,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					5,
 					150,
@@ -1211,7 +1210,7 @@ var (
 			18,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					9,
 					69,
@@ -1229,7 +1228,7 @@ var (
 			18,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					17,
 					50,
@@ -1247,7 +1246,7 @@ var (
 			18,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					2,
 					42,
@@ -1265,7 +1264,7 @@ var (
 			19,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					3,
 					141,
@@ -1283,7 +1282,7 @@ var (
 			19,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					3,
 					70,
@@ -1301,7 +1300,7 @@ var (
 			19,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					17,
 					47,
@@ -1319,7 +1318,7 @@ var (
 			19,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					9,
 					39,
@@ -1337,7 +1336,7 @@ var (
 			20,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					3,
 					135,
@@ -1355,7 +1354,7 @@ var (
 			20,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					3,
 					67,
@@ -1373,7 +1372,7 @@ var (
 			20,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					15,
 					54,
@@ -1391,7 +1390,7 @@ var (
 			20,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					15,
 					43,
@@ -1409,7 +1408,7 @@ var (
 			21,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					144,
@@ -1427,7 +1426,7 @@ var (
 			21,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					17,
 					68,
@@ -1440,7 +1439,7 @@ var (
 			21,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					17,
 					50,
@@ -1458,7 +1457,7 @@ var (
 			21,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					19,
 					46,
@@ -1476,7 +1475,7 @@ var (
 			22,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					2,
 					139,
@@ -1494,7 +1493,7 @@ var (
 			22,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					17,
 					74,
@@ -1507,7 +1506,7 @@ var (
 			22,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					7,
 					54,
@@ -1525,7 +1524,7 @@ var (
 			22,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					34,
 					37,
@@ -1538,7 +1537,7 @@ var (
 			23,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					151,
@@ -1556,7 +1555,7 @@ var (
 			23,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					4,
 					75,
@@ -1574,7 +1573,7 @@ var (
 			23,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					11,
 					54,
@@ -1592,7 +1591,7 @@ var (
 			23,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					16,
 					45,
@@ -1610,7 +1609,7 @@ var (
 			24,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					6,
 					147,
@@ -1628,7 +1627,7 @@ var (
 			24,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					6,
 					73,
@@ -1646,7 +1645,7 @@ var (
 			24,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					11,
 					54,
@@ -1664,7 +1663,7 @@ var (
 			24,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					30,
 					46,
@@ -1682,7 +1681,7 @@ var (
 			25,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					8,
 					132,
@@ -1700,7 +1699,7 @@ var (
 			25,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					8,
 					75,
@@ -1718,7 +1717,7 @@ var (
 			25,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					7,
 					54,
@@ -1736,7 +1735,7 @@ var (
 			25,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					22,
 					45,
@@ -1754,7 +1753,7 @@ var (
 			26,
 			Low,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					10,
 					142,
@@ -1772,7 +1771,7 @@ var (
 			26,
 			Medium,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					19,
 					74,
@@ -1790,7 +1789,7 @@ var (
 			26,
 			High,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					28,
 					50,
@@ -1808,7 +1807,7 @@ var (
 			26,
 			Highest,
 			dataEncoderType10To26,
-			[]block{
+			[]Block{
 				{
 					33,
 					46,
@@ -1826,7 +1825,7 @@ var (
 			27,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					8,
 					152,
@@ -1844,7 +1843,7 @@ var (
 			27,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					22,
 					73,
@@ -1862,7 +1861,7 @@ var (
 			27,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					8,
 					53,
@@ -1880,7 +1879,7 @@ var (
 			27,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					12,
 					45,
@@ -1898,7 +1897,7 @@ var (
 			28,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					3,
 					147,
@@ -1916,7 +1915,7 @@ var (
 			28,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					3,
 					73,
@@ -1934,7 +1933,7 @@ var (
 			28,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					4,
 					54,
@@ -1952,7 +1951,7 @@ var (
 			28,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					11,
 					45,
@@ -1970,7 +1969,7 @@ var (
 			29,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					7,
 					146,
@@ -1988,7 +1987,7 @@ var (
 			29,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					21,
 					73,
@@ -2006,7 +2005,7 @@ var (
 			29,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					1,
 					53,
@@ -2024,7 +2023,7 @@ var (
 			29,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					19,
 					45,
@@ -2042,7 +2041,7 @@ var (
 			30,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					5,
 					145,
@@ -2060,7 +2059,7 @@ var (
 			30,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					19,
 					75,
@@ -2078,7 +2077,7 @@ var (
 			30,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					15,
 					54,
@@ -2096,7 +2095,7 @@ var (
 			30,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					23,
 					45,
@@ -2114,7 +2113,7 @@ var (
 			31,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					13,
 					145,
@@ -2132,7 +2131,7 @@ var (
 			31,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					2,
 					74,
@@ -2150,7 +2149,7 @@ var (
 			31,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					42,
 					54,
@@ -2168,7 +2167,7 @@ var (
 			31,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					23,
 					45,
@@ -2186,7 +2185,7 @@ var (
 			32,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					17,
 					145,
@@ -2199,7 +2198,7 @@ var (
 			32,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					10,
 					74,
@@ -2217,7 +2216,7 @@ var (
 			32,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					10,
 					54,
@@ -2235,7 +2234,7 @@ var (
 			32,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					19,
 					45,
@@ -2253,7 +2252,7 @@ var (
 			33,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					17,
 					145,
@@ -2271,7 +2270,7 @@ var (
 			33,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					14,
 					74,
@@ -2289,7 +2288,7 @@ var (
 			33,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					29,
 					54,
@@ -2307,7 +2306,7 @@ var (
 			33,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					11,
 					45,
@@ -2325,7 +2324,7 @@ var (
 			34,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					13,
 					145,
@@ -2343,7 +2342,7 @@ var (
 			34,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					14,
 					74,
@@ -2361,7 +2360,7 @@ var (
 			34,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					44,
 					54,
@@ -2379,7 +2378,7 @@ var (
 			34,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					59,
 					46,
@@ -2397,7 +2396,7 @@ var (
 			35,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					12,
 					151,
@@ -2415,7 +2414,7 @@ var (
 			35,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					12,
 					75,
@@ -2433,7 +2432,7 @@ var (
 			35,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					39,
 					54,
@@ -2451,7 +2450,7 @@ var (
 			35,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					22,
 					45,
@@ -2469,7 +2468,7 @@ var (
 			36,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					6,
 					151,
@@ -2487,7 +2486,7 @@ var (
 			36,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					6,
 					75,
@@ -2505,7 +2504,7 @@ var (
 			36,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					46,
 					54,
@@ -2523,7 +2522,7 @@ var (
 			36,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					2,
 					45,
@@ -2541,7 +2540,7 @@ var (
 			37,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					17,
 					152,
@@ -2559,7 +2558,7 @@ var (
 			37,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					29,
 					74,
@@ -2577,7 +2576,7 @@ var (
 			37,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					49,
 					54,
@@ -2595,7 +2594,7 @@ var (
 			37,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					24,
 					45,
@@ -2613,7 +2612,7 @@ var (
 			38,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					4,
 					152,
@@ -2631,7 +2630,7 @@ var (
 			38,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					13,
 					74,
@@ -2649,7 +2648,7 @@ var (
 			38,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					48,
 					54,
@@ -2667,7 +2666,7 @@ var (
 			38,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					42,
 					45,
@@ -2685,7 +2684,7 @@ var (
 			39,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					20,
 					147,
@@ -2703,7 +2702,7 @@ var (
 			39,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					40,
 					75,
@@ -2721,7 +2720,7 @@ var (
 			39,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					43,
 					54,
@@ -2739,7 +2738,7 @@ var (
 			39,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					10,
 					45,
@@ -2757,7 +2756,7 @@ var (
 			40,
 			Low,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					19,
 					148,
@@ -2775,7 +2774,7 @@ var (
 			40,
 			Medium,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					18,
 					75,
@@ -2793,7 +2792,7 @@ var (
 			40,
 			High,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					34,
 					54,
@@ -2811,7 +2810,7 @@ var (
 			40,
 			Highest,
 			dataEncoderType27To40,
-			[]block{
+			[]Block{
 				{
 					20,
 					45,
@@ -2830,7 +2829,7 @@ var (
 
 
 
-// A dataEncoder encodes data for a particular QR Code version.
+// A dataEncoder encodes data for a particular QR Code Version.
 type dataEncoder struct {
 	// Minimum & maximum versions supported.
 	minVersion                   int
@@ -2875,7 +2874,7 @@ func GetDataEncoder(version int)*dataEncoder{
 	case version >=27 && version <=40:
 		return dataEncoderTypeMap[dataEncoderType27To40]
 	default:
-		panic("version not found")
+		panic("Version not found")
 	}
 }
 
@@ -2888,7 +2887,6 @@ func (de *dataEncoder)CharCountBits(format int)int{
 	case 4:
 		return de.numByteCharCountBits
 	default:
-		logger.Println("format",format)
 		panic("format not found")
 	}
 	return 0
