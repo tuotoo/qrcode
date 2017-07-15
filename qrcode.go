@@ -9,7 +9,12 @@ import (
     "os"
     "image/png"
     "image/color"
+    "log"
+    "io"
+    "image/draw"
 )
+
+var logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Llongfile)
 
 type PositionDetectionPatterns struct {
 	Topleft *PosGroup
@@ -27,7 +32,13 @@ type PosGroup struct {
 }
 
 type Matrix struct {
-	Points [][]bool
+    OrgImage image.Image
+    OrgSize  image.Rectangle
+    OrgPoints   [][]bool
+	Points   [][]bool
+    Size     image.Rectangle
+    Data     []bool
+    Content  string
 }
 
 func (m *Matrix) At(x, y int) bool {
@@ -35,7 +46,7 @@ func (m *Matrix) At(x, y int) bool {
 	f := 0
 	for i := -1; i < 2; i++ {
 		for j := -1; j < 2; j++ {
-			if m.Points[y+i][x+j] {
+			if m.OrgPoints[y+i][x+j] {
 				t += 1
 			} else {
 				f += 1
@@ -587,7 +598,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
                 x := start.X + i
                 y := start.Y + int(k*float64(i))
                 //logger.Println(x,y,matrix.Points[y][x])
-                line = append(line, matrix.Points[y][x])
+                line = append(line, matrix.OrgPoints[y][x])
             }
         } else {
             for i := 0; i >= length; i-- {
@@ -595,7 +606,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
                 x := start.X + i
                 y := start.Y + int(k*float64(i))
                 //logger.Println(x,y,matrix.Points[y][x])
-                line = append(line, matrix.Points[y][x])
+                line = append(line, matrix.OrgPoints[y][x])
             }
         }
     } else {
@@ -606,7 +617,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
                 y := start.Y + i
                 x := start.X + int(k*float64(i))
                 //logger.Println(x,y,matrix.Points[y][x])
-                line = append(line, matrix.Points[y][x])
+                line = append(line, matrix.OrgPoints[y][x])
             }
         } else {
             for i := 0; i >= length; i-- {
@@ -614,7 +625,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
                 y := start.Y + i
                 x := start.X + int(k*float64(i))
                 //logger.Println(x,y,matrix.Points[y][x])
-                line = append(line, matrix.Points[y][x])
+                line = append(line, matrix.OrgPoints[y][x])
             }
         }
     }
@@ -740,4 +751,165 @@ func ExportMatrix(size image.Rectangle, matrix *Matrix, filename string) {
     }
     defer firesult.Close()
     png.Encode(firesult, result)
+}
+
+func (matrix *Matrix)Binarizat()uint8{
+    return 128
+}
+
+func (matrix *Matrix)SplitGroups()[][]Pos{
+    m := map[Pos]bool{}
+    for y,line := range matrix.OrgPoints{
+        for x,value := range line{
+            if value{
+                m[Pos{x,y}]=true
+            }
+        }
+    }
+    groups := [][]Pos{}
+    for pos, _ := range m {
+        delete(m, pos)
+        groups = append(groups, SplitGroup(m, pos))
+    }
+    return groups
+}
+
+func (matrix *Matrix)ReadImage(){
+    matrix.OrgSize = matrix.OrgImage.Bounds()
+    width := matrix.OrgSize.Dx()
+    height := matrix.OrgSize.Dy()
+    pic := image.NewGray(matrix.OrgSize)
+    draw.Draw(pic, matrix.OrgSize, matrix.OrgImage, matrix.OrgImage.Bounds().Min, draw.Src)
+    var fz uint8 = matrix.Binarizat() //uint8(GetOSTUThreshold(zft))
+    for y := 0; y < height; y++ {
+        line := []bool{}
+        for x := 0; x < width; x++ {
+            if pic.Pix[y*width+x] < fz {
+                line = append(line, true)
+            } else {
+                line = append(line, false)
+            }
+        }
+        matrix.OrgPoints = append(matrix.OrgPoints, line)
+    }
+    ExportMatrix(matrix.OrgSize, matrix, "matrix")
+}
+
+func DecodeImg(img image.Image)(*Matrix,error){
+    matrix := new(Matrix)
+    matrix.OrgImage = img
+    matrix.ReadImage()
+
+    groups := matrix.SplitGroups()
+    //计算分组
+    c := 0
+    for _, group := range groups {
+        c += len(group)
+    }
+    // 判断圈圈
+    kong := [][]Pos{}
+    // 判断实心
+    bukong := [][]Pos{}
+    for _, group := range groups {
+        if len(group) == 0 {
+            continue
+        }
+        var groupmap = map[Pos]bool{}
+        for _, pos := range group {
+            groupmap[pos] = true
+        }
+        minx, maxx, miny, maxy := Rectangle(group)
+        if Kong(groupmap, minx, maxx, miny, maxy) {
+            kong = append(kong, group)
+        } else {
+            bukong = append(bukong, group)
+        }
+    }
+    ExportGroups(matrix.OrgSize, groups, "groups")
+    positionDetectionPatterns := [][][]Pos{}
+    for _, bukonggroup := range bukong {
+        for _, konggroup := range kong {
+            if IsPositionDetectionPattern(bukonggroup, konggroup) {
+                positionDetectionPatterns = append(positionDetectionPatterns, [][]Pos{bukonggroup, konggroup})
+            }
+        }
+    }
+    for i, pattern := range positionDetectionPatterns {
+        ExportGroups(matrix.OrgSize, pattern, "positionDetectionPattern"+strconv.FormatInt(int64(i), 10))
+    }
+    linewidth := LineWidth(positionDetectionPatterns)
+    pdp := NewPositionDetectionPattern(positionDetectionPatterns)
+    topstart := &Pos{X: pdp.Topleft.Center.X + (int(3.5*linewidth) + 1), Y: pdp.Topleft.Center.Y + int(3*linewidth)}
+    topend := &Pos{X: pdp.Right.Center.X - (int(3.5*linewidth) + 1), Y: pdp.Right.Center.Y + int(3*linewidth)}
+    topTimePattens := Line(topstart, topend, matrix)
+    topcl := Centerlist(topTimePattens, topstart.X)
+
+    leftstart := &Pos{X: pdp.Topleft.Center.X + int(3*linewidth), Y: pdp.Topleft.Center.Y + (int(3.5*linewidth) + 1)}
+    leftend := &Pos{X: pdp.Bottom.Center.X + int(3*linewidth), Y: pdp.Bottom.Center.Y - (int(3.5*linewidth) + 1)}
+    leftTimePattens := Line(leftstart, leftend, matrix)
+    leftcl := Centerlist(leftTimePattens, leftstart.Y)
+
+    qrtopcl := []int{}
+    for i := -3; i <= 3; i++ {
+        qrtopcl = append(qrtopcl, pdp.Topleft.Center.X+int(float64(i)*linewidth))
+    }
+    qrtopcl = append(qrtopcl, topcl...)
+    for i := -3; i <= 3; i++ {
+        qrtopcl = append(qrtopcl, pdp.Right.Center.X+int(float64(i)*linewidth))
+    }
+
+    qrleftcl := []int{}
+    for i := -3; i <= 3; i++ {
+        qrleftcl = append(qrleftcl, pdp.Topleft.Center.Y+int(float64(i)*linewidth))
+    }
+    qrleftcl = append(qrleftcl, leftcl...)
+    for i := -3; i <= 3; i++ {
+        qrleftcl = append(qrleftcl, pdp.Bottom.Center.Y+int(float64(i)*linewidth))
+    }
+    for _, y := range qrleftcl {
+        line := []bool{}
+        for _, x := range qrtopcl {
+            line = append(line, matrix.At(x, y))
+        }
+        matrix.Points = append(matrix.Points, line)
+    }
+    matrix.Size = image.Rect(0,0,len(matrix.Points),len(matrix.Points))
+    return matrix,nil
+}
+
+func Decode(fi io.Reader)(*Matrix,error) {
+    img, err := png.Decode(fi)
+    if !check(err) {
+        return nil,err
+    }
+    qrmatrix,err:=DecodeImg(img)
+    check(err)
+    ExportMatrix(image.Rect(0, 0, qrmatrix.OrgSize.Dx(), qrmatrix.OrgSize.Dy()), qrmatrix, "bitmatrix")
+    qrErrorCorrectionLevel, qrMask := qrmatrix.FormatInfo()
+    logger.Println("qrErrorCorrectionLevel, qrMask", qrErrorCorrectionLevel, qrMask)
+    maskfunc := MaskFunc(qrMask)
+    unmaskmatrix := new(Matrix)
+    for y, line := range qrmatrix.Points {
+        l := []bool{}
+        for x, value := range line {
+            l = append(l, maskfunc(x, y) != value)
+        }
+        unmaskmatrix.Points = append(unmaskmatrix.Points, l)
+    }
+
+    //logger.Println(qrmatrix.Points[0])
+    //logger.Println(unmaskmatrix.Points[0])
+    ExportMatrix(image.Rect(0, 0, qrmatrix.OrgSize.Dx(), qrmatrix.OrgSize.Dy()), unmaskmatrix, "unmaskmatrix")
+    dataarea := unmaskmatrix.DataArea()
+    ExportMatrix(image.Rect(0, 0, qrmatrix.OrgSize.Dx(), qrmatrix.OrgSize.Dy()), dataarea, "mask")
+    //logger.Println(len(GetData(unmaskmatrix,dataarea)),GetData(unmaskmatrix,dataarea))
+    //logger.Println(len(Bool2Byte(GetData(unmaskmatrix,dataarea))),Bool2Byte(GetData(unmaskmatrix,dataarea)))
+    //logger.Println(StringByte(Bool2Byte(GetData(unmaskmatrix,dataarea))))
+    logger.Println(StringBool(GetData(unmaskmatrix, dataarea)))
+    datacode, errorcode := ParseBlock(qrmatrix, GetData(unmaskmatrix, dataarea))
+    logger.Println(StringBool(datacode), StringBool(errorcode))
+    bt := Bits2Bytes(datacode, unmaskmatrix.Version())
+    logger.Println(bt)
+    qrmatrix.Content = string(bt)
+    return qrmatrix,nil
 }
