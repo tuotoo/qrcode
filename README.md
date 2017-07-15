@@ -1,5 +1,3 @@
 # QR Code decoder by golang
 
-The project is being developed
-
-解码不需要zbar库，
+The project is being developed,Not need zbar.
