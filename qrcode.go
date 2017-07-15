@@ -801,11 +801,6 @@ func DecodeImg(img image.Image)(*Matrix,error){
     matrix.ReadImage()
 
     groups := matrix.SplitGroups()
-    //计算分组
-    c := 0
-    for _, group := range groups {
-        c += len(group)
-    }
     // 判断圈圈
     kong := [][]Pos{}
     // 判断实心
