@@ -732,9 +732,9 @@ func ExportGroup(size image.Rectangle, group []Pos, filename string) {
     png.Encode(firesult, result)
 }
 
-func ExportMatrix(size image.Rectangle, matrix *Matrix, filename string) {
+func ExportMatrix(size image.Rectangle, points [][]bool, filename string) {
     result := image.NewGray(size)
-    for y, line := range matrix.Points {
+    for y, line := range points {
         for x, value := range line {
             var c color.Color
             if value {
@@ -792,7 +792,7 @@ func (matrix *Matrix)ReadImage(){
         }
         matrix.OrgPoints = append(matrix.OrgPoints, line)
     }
-    ExportMatrix(matrix.OrgSize, matrix, "matrix")
+    ExportMatrix(matrix.OrgSize, matrix.OrgPoints, "matrix")
 }
 
 func DecodeImg(img image.Image)(*Matrix,error){
@@ -884,7 +884,7 @@ func Decode(fi io.Reader)(*Matrix,error) {
     }
     qrmatrix,err:=DecodeImg(img)
     check(err)
-    ExportMatrix(image.Rect(0, 0, qrmatrix.OrgSize.Dx(), qrmatrix.OrgSize.Dy()), qrmatrix, "bitmatrix")
+    ExportMatrix(qrmatrix.Size, qrmatrix.Points, "bitmatrix")
     qrErrorCorrectionLevel, qrMask := qrmatrix.FormatInfo()
     logger.Println("qrErrorCorrectionLevel, qrMask", qrErrorCorrectionLevel, qrMask)
     maskfunc := MaskFunc(qrMask)
@@ -897,14 +897,9 @@ func Decode(fi io.Reader)(*Matrix,error) {
         unmaskmatrix.Points = append(unmaskmatrix.Points, l)
     }
 
-    //logger.Println(qrmatrix.Points[0])
-    //logger.Println(unmaskmatrix.Points[0])
-    ExportMatrix(image.Rect(0, 0, qrmatrix.OrgSize.Dx(), qrmatrix.OrgSize.Dy()), unmaskmatrix, "unmaskmatrix")
+    ExportMatrix(qrmatrix.Size, unmaskmatrix.Points, "unmaskmatrix")
     dataarea := unmaskmatrix.DataArea()
-    ExportMatrix(image.Rect(0, 0, qrmatrix.OrgSize.Dx(), qrmatrix.OrgSize.Dy()), dataarea, "mask")
-    //logger.Println(len(GetData(unmaskmatrix,dataarea)),GetData(unmaskmatrix,dataarea))
-    //logger.Println(len(Bool2Byte(GetData(unmaskmatrix,dataarea))),Bool2Byte(GetData(unmaskmatrix,dataarea)))
-    //logger.Println(StringByte(Bool2Byte(GetData(unmaskmatrix,dataarea))))
+    ExportMatrix(qrmatrix.Size, dataarea.Points, "mask")
     logger.Println(StringBool(GetData(unmaskmatrix, dataarea)))
     datacode, errorcode := ParseBlock(qrmatrix, GetData(unmaskmatrix, dataarea))
     logger.Println(StringBool(datacode), StringBool(errorcode))
