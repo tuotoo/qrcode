@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	_ "image/jpeg"
 	"image/png"
 	"io"
 	"log"
@@ -271,7 +272,6 @@ func check(err error) bool {
 
 func Rectangle(group []Pos) (minx, maxx, miny, maxy int) {
 	minx, maxx, miny, maxy = group[0].X, group[0].X, group[0].Y, group[0].Y
-
 	for _, pos := range group {
 		if pos.X < minx {
 			minx = pos.X
@@ -755,9 +755,9 @@ func (matrix *Matrix) SplitGroups() [][]Pos {
 				continue
 			}
 			newgroup := []Pos{}
-			newgroup = append(newgroup,Pos{x,y})
-			m[y][x]=false
-			for i:=0;i<len(newgroup);i++ {
+			newgroup = append(newgroup, Pos{x, y})
+			m[y][x] = false
+			for i := 0; i < len(newgroup); i++ {
 				v := newgroup[i]
 				SplitGroup(&m, v.X, v.Y, &newgroup)
 			}

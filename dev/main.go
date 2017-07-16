@@ -16,7 +16,7 @@ func main() {
 		log.Fatal(err)
 	}
 	pprof.StartCPUProfile(f)
-	fi, err := os.Open("qrcode2.png")
+	fi, err := os.Open("erweima.jpg")
 	if !check(err) {
 		return
 	}
