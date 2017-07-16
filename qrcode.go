@@ -256,11 +256,10 @@ func PossToGroup(group []Pos) *PosGroup {
 	posgroup := new(PosGroup)
 	posgroup.Group = group
 	posgroup.Center = CenterPoint(group)
-	var mapgroup = map[Pos]bool{}
+	posgroup.GroupMap = make(map[Pos]bool)
 	for _, pos := range group {
-		mapgroup[pos] = true
+		posgroup.GroupMap[pos] = true
 	}
-	posgroup.GroupMap = mapgroup
 	minx, maxx, miny, maxy := Rectangle(group)
 	posgroup.Min = Pos{X: minx, Y: miny}
 	posgroup.Max = Pos{X: maxx, Y: maxy}
