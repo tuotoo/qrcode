@@ -21,6 +21,7 @@ func main() {
 		return
 	}
 	defer fi.Close()
+	qrcode.Debug = false
 	qrmatrix, err := qrcode.Decode(fi)
 	check(err)
 	logger.Println(qrmatrix.Content)

@@ -19,6 +19,8 @@ import (
 
 var logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Llongfile)
 
+var Debug = false
+
 type PositionDetectionPatterns struct {
 	Topleft *PosGroup
 	Right   *PosGroup
@@ -687,12 +689,18 @@ func Centerlist(line []bool, offset int) (li []int) {
 }
 
 func ExportEveryGroup(size image.Rectangle, kong [][]Pos, filename string) {
+	if !Debug{
+		return
+	}
 	for i, group := range kong {
 		ExportGroup(size, group, filename+strconv.FormatInt(int64(i), 10))
 	}
 }
 
 func ExportGroups(size image.Rectangle, kong []*PosGroup, filename string) {
+	if !Debug{
+		return
+	}
 	result := image.NewGray(size)
 	for _, group := range kong {
 		for _, pos := range group.Group {
@@ -708,6 +716,9 @@ func ExportGroups(size image.Rectangle, kong []*PosGroup, filename string) {
 }
 
 func ExportGroup(size image.Rectangle, group []Pos, filename string) {
+	if !Debug{
+		return
+	}
 	result := image.NewGray(size)
 	for _, pos := range group {
 		result.Set(pos.X, pos.Y, color.White)
@@ -721,6 +732,9 @@ func ExportGroup(size image.Rectangle, group []Pos, filename string) {
 }
 
 func ExportMatrix(size image.Rectangle, points [][]bool, filename string) {
+	if !Debug{
+		return
+	}
 	result := image.NewGray(size)
 	for y, line := range points {
 		for x, value := range line {
