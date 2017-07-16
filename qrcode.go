@@ -181,9 +181,9 @@ func (m *Matrix) DataArea() *Matrix {
 	return da
 }
 
-func NewPositionDetectionPattern(pdps [][][]Pos) *PositionDetectionPatterns {
+func NewPositionDetectionPattern(pdps [][]*PosGroup) *PositionDetectionPatterns {
 	if len(pdps) < 3 {
-		panic("缺少pdp")
+		panic("lost PositionDetectionPattern")
 	}
 	pdpgroups := []*PosGroup{}
 	for _, pdp := range pdps {
@@ -225,10 +225,10 @@ func NewPositionDetectionPattern(pdps [][][]Pos) *PositionDetectionPatterns {
 	return positionDetectionPatterns
 }
 
-func PosslistToGroup(groups [][]Pos) *PosGroup {
+func PosslistToGroup(groups []*PosGroup) *PosGroup {
 	newgroup := []Pos{}
 	for _, group := range groups {
-		newgroup = append(newgroup, group...)
+		newgroup = append(newgroup, group.Group...)
 	}
 	return PossToGroup(newgroup)
 }
@@ -260,9 +260,9 @@ func PossToGroup(group []Pos) *PosGroup {
 	}
 	posgroup.GroupMap = mapgroup
 	minx, maxx, miny, maxy := Rectangle(group)
-	posgroup.Kong = Kong(mapgroup, minx, maxx, miny, maxy)
 	posgroup.Min = Pos{X: minx, Y: miny}
 	posgroup.Max = Pos{X: maxx, Y: maxy}
+	posgroup.Kong = Kong(posgroup)
 	return posgroup
 }
 
@@ -362,13 +362,13 @@ func SplitGroup(poss *[][]bool, centerx, centery int, around *[]Pos) {
 	}
 }
 
-func Kong(groupmap map[Pos]bool, minx, maxx, miny, maxy int) bool {
+func Kong(group *PosGroup) bool {
 	count := 0
-	for x := minx; x <= maxx; x++ {
+	for x := group.Min.X; x <= group.Max.X; x++ {
 		dian := false
 		last := false
-		for y := miny; y <= maxy; y++ {
-			if _, ok := groupmap[Pos{X: x, Y: y}]; ok {
+		for y := group.Min.Y; y <= group.Max.Y; y++ {
+			if _, ok := group.GroupMap[Pos{X: x, Y: y}]; ok {
 				if !last {
 					if dian {
 						if count > 2 {
@@ -459,28 +459,27 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, []bool) {
 	return datacode, errorcode
 }
 
-func LineWidth(positionDetectionPatterns [][][]Pos) float64 {
+func LineWidth(positionDetectionPatterns [][]*PosGroup) float64 {
 	sumwidth := 0
 	for _, positionDetectionPattern := range positionDetectionPatterns {
 		for _, group := range positionDetectionPattern {
-			minx, maxx, miny, maxy := Rectangle(group)
-			sumwidth += maxx - minx + 1
-			sumwidth += maxy - miny + 1
+			sumwidth += group.Max.X - group.Min.X + 1
+			sumwidth += group.Max.Y - group.Min.Y + 1
 		}
 	}
 	return float64(sumwidth) / 60
 }
 
-func IsPositionDetectionPattern(bukonggroup, konggroup []Pos) bool {
-	buminx, bumaxx, buminy, bumaxy := Rectangle(bukonggroup)
-	minx, maxx, miny, maxy := Rectangle(konggroup)
+func IsPositionDetectionPattern(bukonggroup, konggroup *PosGroup) bool {
+	buminx, bumaxx, buminy, bumaxy := bukonggroup.Min.X, bukonggroup.Max.X, bukonggroup.Min.Y, bukonggroup.Max.Y
+	minx, maxx, miny, maxy := konggroup.Min.X, konggroup.Max.X, konggroup.Min.Y, konggroup.Max.Y
 	if !(buminx > minx && bumaxx > minx &&
 		buminx < maxx && bumaxx < maxx &&
 		buminy > miny && bumaxy > miny &&
 		buminy < maxy && bumaxy < maxy) {
 		return false
 	}
-	kongcenter := CenterPoint(konggroup)
+	kongcenter := konggroup.Center
 	if !(kongcenter.X > buminx && kongcenter.X < bumaxx &&
 		kongcenter.Y > buminy && kongcenter.Y < bumaxy) {
 		return false
@@ -693,10 +692,10 @@ func ExportEveryGroup(size image.Rectangle, kong [][]Pos, filename string) {
 	}
 }
 
-func ExportGroups(size image.Rectangle, kong [][]Pos, filename string) {
+func ExportGroups(size image.Rectangle, kong []*PosGroup, filename string) {
 	result := image.NewGray(size)
 	for _, group := range kong {
-		for _, pos := range group {
+		for _, pos := range group.Group {
 			result.Set(pos.X, pos.Y, color.White)
 		}
 	}
@@ -764,7 +763,6 @@ func (matrix *Matrix) SplitGroups() [][]Pos {
 			groups = append(groups, newgroup)
 		}
 	}
-	logger.Println("len(groups)", len(groups))
 	return groups
 }
 
@@ -796,30 +794,26 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 
 	groups := matrix.SplitGroups()
 	// 判断圈圈
-	kong := [][]Pos{}
+	kong := []*PosGroup{}
 	// 判断实心
-	bukong := [][]Pos{}
+	bukong := []*PosGroup{}
 	for _, group := range groups {
 		if len(group) == 0 {
 			continue
 		}
-		var groupmap = map[Pos]bool{}
-		for _, pos := range group {
-			groupmap[pos] = true
-		}
-		minx, maxx, miny, maxy := Rectangle(group)
-		if Kong(groupmap, minx, maxx, miny, maxy) {
-			kong = append(kong, group)
+		newgroup := PossToGroup(group)
+		if newgroup.Kong {
+			kong = append(kong, newgroup)
 		} else {
-			bukong = append(bukong, group)
+			bukong = append(bukong, newgroup)
 		}
 	}
-	ExportGroups(matrix.OrgSize, groups, "groups/groups")
-	positionDetectionPatterns := [][][]Pos{}
+	ExportEveryGroup(matrix.OrgSize, groups, "groups/groups")
+	positionDetectionPatterns := [][]*PosGroup{}
 	for _, bukonggroup := range bukong {
 		for _, konggroup := range kong {
 			if IsPositionDetectionPattern(bukonggroup, konggroup) {
-				positionDetectionPatterns = append(positionDetectionPatterns, [][]Pos{bukonggroup, konggroup})
+				positionDetectionPatterns = append(positionDetectionPatterns, []*PosGroup{bukonggroup, konggroup})
 			}
 		}
 	}
@@ -889,11 +883,11 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	ExportMatrix(qrmatrix.Size, unmaskmatrix.Points, "unmaskmatrix")
 	dataarea := unmaskmatrix.DataArea()
 	ExportMatrix(qrmatrix.Size, dataarea.Points, "mask")
-	logger.Println(StringBool(GetData(unmaskmatrix, dataarea)))
-	datacode, errorcode := ParseBlock(qrmatrix, GetData(unmaskmatrix, dataarea))
-	logger.Println(StringBool(datacode), StringBool(errorcode))
+	//logger.Println(StringBool(GetData(unmaskmatrix, dataarea)))
+	datacode, _ := ParseBlock(qrmatrix, GetData(unmaskmatrix, dataarea))
+	//logger.Println(StringBool(datacode), StringBool(errorcode))
 	bt := Bits2Bytes(datacode, unmaskmatrix.Version())
-	logger.Println(bt)
+	//logger.Println(bt)
 	qrmatrix.Content = string(bt)
 	return qrmatrix, nil
 }
