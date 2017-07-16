@@ -689,7 +689,7 @@ func Centerlist(line []bool, offset int) (li []int) {
 }
 
 func ExportEveryGroup(size image.Rectangle, kong [][]Pos, filename string) {
-	if !Debug{
+	if !Debug {
 		return
 	}
 	for i, group := range kong {
@@ -698,7 +698,7 @@ func ExportEveryGroup(size image.Rectangle, kong [][]Pos, filename string) {
 }
 
 func ExportGroups(size image.Rectangle, kong []*PosGroup, filename string) {
-	if !Debug{
+	if !Debug {
 		return
 	}
 	result := image.NewGray(size)
@@ -716,7 +716,7 @@ func ExportGroups(size image.Rectangle, kong []*PosGroup, filename string) {
 }
 
 func ExportGroup(size image.Rectangle, group []Pos, filename string) {
-	if !Debug{
+	if !Debug {
 		return
 	}
 	result := image.NewGray(size)
@@ -732,7 +732,7 @@ func ExportGroup(size image.Rectangle, group []Pos, filename string) {
 }
 
 func ExportMatrix(size image.Rectangle, points [][]bool, filename string) {
-	if !Debug{
+	if !Debug {
 		return
 	}
 	result := image.NewGray(size)
