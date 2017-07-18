@@ -16,12 +16,12 @@ func main() {
 		log.Fatal(err)
 	}
 	pprof.StartCPUProfile(f)
-	fi, err := os.Open("qrcode2.png")
+	fi, err := os.Open("qrcode4.png")
 	if !check(err) {
 		return
 	}
 	defer fi.Close()
-	qrcode.Debug = false
+	qrcode.Debug = true
 	qrmatrix, err := qrcode.Decode(fi)
 	check(err)
 	logger.Println(qrmatrix.Content)

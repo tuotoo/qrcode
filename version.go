@@ -1,5 +1,7 @@
 package qrcode
 
+import "fmt"
+
 // Error detection/recovery capacity.
 //
 // There are several levels of error detection/recovery capacity. Higher levels
@@ -2827,13 +2829,11 @@ var (
 	}
 )
 
-
-
 // A dataEncoder encodes data for a particular QR Code Version.
 type dataEncoder struct {
 	// Minimum & maximum versions supported.
-	minVersion                   int
-	maxVersion                   int
+	minVersion int
+	maxVersion int
 
 	// Character count lengths.
 	numNumericCharCountBits      int
@@ -2856,7 +2856,7 @@ var dataEncoderTypeMap = map[dataEncoderType]*dataEncoder{
 		numAlphanumericCharCountBits: 11,
 		numByteCharCountBits:         16,
 	},
-	dataEncoderType27To40:&dataEncoder{
+	dataEncoderType27To40: &dataEncoder{
 		minVersion:                   27,
 		maxVersion:                   40,
 		numNumericCharCountBits:      14,
@@ -2865,21 +2865,21 @@ var dataEncoderTypeMap = map[dataEncoderType]*dataEncoder{
 	},
 }
 
-func GetDataEncoder(version int)*dataEncoder{
+func GetDataEncoder(version int) *dataEncoder {
 	switch {
-	case version >=1 && version <= 9:
+	case version >= 1 && version <= 9:
 		return dataEncoderTypeMap[dataEncoderType1To9]
-	case version >=10 && version <=26:
+	case version >= 10 && version <= 26:
 		return dataEncoderTypeMap[dataEncoderType10To26]
-	case version >=27 && version <=40:
+	case version >= 27 && version <= 40:
 		return dataEncoderTypeMap[dataEncoderType27To40]
 	default:
 		panic("Version not found")
 	}
 }
 
-func (de *dataEncoder)CharCountBits(format int)int{
-	switch format{
+func (de *dataEncoder) CharCountBits(format int) int {
+	switch format {
 	case 1:
 		return de.numNumericCharCountBits
 	case 2:
@@ -2887,7 +2887,7 @@ func (de *dataEncoder)CharCountBits(format int)int{
 	case 4:
 		return de.numByteCharCountBits
 	default:
-		panic("format not found")
+		panic(fmt.Sprintf("format not found : %d", format))
 	}
 	return 0
 }

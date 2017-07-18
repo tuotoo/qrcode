@@ -2,7 +2,7 @@ package qrcode
 
 import (
 	"fmt"
-	"git.spiritframe.com/tuotoo/utils"
+	"github.com/klauspost/reedsolomon"
 	"image"
 	"image/color"
 	"image/draw"
@@ -13,6 +13,7 @@ import (
 	"math"
 	"os"
 	reflect "reflect"
+	"runtime"
 	"strconv"
 	"time"
 )
@@ -267,8 +268,19 @@ func PossToGroup(group []Pos) *PosGroup {
 	return posgroup
 }
 
-func check(err error) bool {
-	return utils.Check(err)
+func check(err error, backLevel ...int) (ok bool) {
+	level := 1
+	if len(backLevel) != 0 {
+		level = backLevel[0]
+	}
+	if err != nil {
+		_, filename, line, _ := runtime.Caller(level)
+		logger.Println(filename, line, err)
+		ok = false
+	} else {
+		ok = true
+	}
+	return
 }
 
 func Rectangle(group []Pos) (minx, maxx, miny, maxy int) {
@@ -391,7 +403,7 @@ func Kong(group *PosGroup) bool {
 	return false
 }
 
-func ParseBlock(m *Matrix, data []bool) ([]bool, []bool) {
+func ParseBlock(m *Matrix, data []bool) []bool {
 	version := m.Version()
 	level, _ := m.FormatInfo()
 	var qrcodeversion = QRcodeVersion{}
@@ -423,10 +435,6 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, []bool) {
 			break
 		}
 	}
-	datacode := []bool{}
-	for _, block := range dataBlocks {
-		datacode = append(datacode, block...)
-	}
 
 	errorBlocks := [][]bool{}
 	for _, block := range qrcodeversion.Block {
@@ -452,12 +460,30 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, []bool) {
 			break
 		}
 	}
-	errorcode := []bool{}
-	for _, block := range errorBlocks {
-		errorcode = append(errorcode, block...)
-	}
 
-	return datacode, errorcode
+	result := []byte{}
+	for i, _ := range dataBlocks {
+		blockbyte := BchReconstruct(Bool2Byte(dataBlocks[i]), Bool2Byte(errorBlocks[i]))
+		result = append(result, blockbyte[:len(Bool2Byte(dataBlocks[i]))]...)
+	}
+	return Byte2Bool(result)
+}
+
+func Byte2Bool(bl []byte) []bool {
+	result := []bool{}
+	for _, b := range bl {
+		temp := make([]bool, 8)
+		for i := 0; i < 8; i++ {
+			if (b>>uint(i))&1 == 1 {
+				temp[7-i] = true
+			} else {
+				temp[7-i] = false
+			}
+
+		}
+		result = append(result, temp...)
+	}
+	return result
 }
 
 func LineWidth(positionDetectionPatterns [][]*PosGroup) float64 {
@@ -588,7 +614,6 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 				k := float64(end.Y-start.Y) / float64(length)
 				x := start.X + i
 				y := start.Y + int(k*float64(i))
-				//logger.Println(x,y,matrix.Points[y][x])
 				line = append(line, matrix.OrgPoints[y][x])
 			}
 		} else {
@@ -596,7 +621,6 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 				k := float64(end.Y-start.Y) / float64(length)
 				x := start.X + i
 				y := start.Y + int(k*float64(i))
-				//logger.Println(x,y,matrix.Points[y][x])
 				line = append(line, matrix.OrgPoints[y][x])
 			}
 		}
@@ -607,7 +631,6 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 				k := float64(end.X-start.X) / float64(length)
 				y := start.Y + i
 				x := start.X + int(k*float64(i))
-				//logger.Println(x,y,matrix.Points[y][x])
 				line = append(line, matrix.OrgPoints[y][x])
 			}
 		} else {
@@ -615,7 +638,6 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 				k := float64(end.X-start.X) / float64(length)
 				y := start.Y + i
 				x := start.X + int(k*float64(i))
-				//logger.Println(x,y,matrix.Points[y][x])
 				line = append(line, matrix.OrgPoints[y][x])
 			}
 		}
@@ -892,17 +914,48 @@ func Decode(fi io.Reader) (*Matrix, error) {
 		}
 		unmaskmatrix.Points = append(unmaskmatrix.Points, l)
 	}
-
+	logger.Println("Version:", unmaskmatrix.Version())
 	ExportMatrix(qrmatrix.Size, unmaskmatrix.Points, "unmaskmatrix")
 	dataarea := unmaskmatrix.DataArea()
 	ExportMatrix(qrmatrix.Size, dataarea.Points, "mask")
-	//logger.Println(StringBool(GetData(unmaskmatrix, dataarea)))
-	datacode, _ := ParseBlock(qrmatrix, GetData(unmaskmatrix, dataarea))
-	//logger.Println(StringBool(datacode), StringBool(errorcode))
+	datacode := ParseBlock(qrmatrix, GetData(unmaskmatrix, dataarea))
 	bt := Bits2Bytes(datacode, unmaskmatrix.Version())
-	//logger.Println(bt)
 	qrmatrix.Content = string(bt)
 	return qrmatrix, nil
+}
+
+func BchReconstruct(datacodebyte, errorcodebyte []byte) []byte {
+	codelist := make([][]byte, len(datacodebyte)+len(errorcodebyte))
+	for i, _ := range datacodebyte {
+		codelist[i] = []byte{datacodebyte[i]}
+	}
+	for i, _ := range errorcodebyte {
+		codelist[len(datacodebyte)+i] = []byte{errorcodebyte[i]}
+	}
+	enc, err := reedsolomon.New(len(datacodebyte), len(errorcodebyte))
+	check(err)
+	ok, err := enc.Verify(codelist)
+	check(err)
+	if !ok {
+
+		err = enc.Reconstruct(codelist)
+		check(err)
+
+		ok, err = enc.Verify(codelist)
+		if !ok {
+			logger.Println(codelist)
+			logger.Println("Verification failed after reconstruction, data likely corrupted.")
+		}
+	}
+	rightcodebyte := []byte{}
+	for i, _ := range datacodebyte {
+		rightcodebyte = append(rightcodebyte, codelist[i][0])
+	}
+	if !ok && Debug {
+		logger.Print("before reconstruct:", StringBool(Byte2Bool(datacodebyte)))
+		logger.Print("after  reconstruct:", StringBool(Byte2Bool(rightcodebyte)))
+	}
+	return rightcodebyte
 }
 
 // Copy creates a deep copy of whatever is passed to it and returns the copy
