@@ -2,6 +2,7 @@ package qrcode
 
 import (
 	"fmt"
+	"github.com/maruel/rs"
 	"image"
 	"image/color"
 	"image/draw"
@@ -15,8 +16,6 @@ import (
 	"runtime"
 	"strconv"
 	"time"
-	"github.com/maruel/rs"
-	"git.spiritframe.com/tuotoo/utils"
 )
 
 var logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Llongfile)
@@ -927,14 +926,14 @@ func Decode(fi io.Reader) (*Matrix, error) {
 
 func QRReconstruct(data, ecc []byte) []byte {
 	d := rs.NewDecoder(rs.QRCodeField256)
-	orgdata := utils.Copy(data).([]byte)
-	orgecc := utils.Copy(ecc).([]byte)
+	orgdata := Copy(data).([]byte)
+	orgecc := Copy(ecc).([]byte)
 	nbErrors, err := d.Decode(data, ecc)
 	if err != nil {
 		logger.Panicf("Got error: %s", err)
 	}
-	if nbErrors != 0 && Debug{
-		logger.Println("nbErrors",nbErrors)
+	if nbErrors != 0 && Debug {
+		logger.Println("nbErrors", nbErrors)
 		logger.Println("orgdata vs lastdata")
 		logger.Println(StringBool(Byte2Bool(orgdata)))
 		logger.Println(StringBool(Byte2Bool(data)))

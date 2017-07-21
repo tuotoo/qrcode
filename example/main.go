@@ -1,7 +1,6 @@
 package main
 
 import (
-	"git.spiritframe.com/tuotoo/utils"
 	"github.com/tuotoo/qrcode"
 	"log"
 	"os"
@@ -16,12 +15,12 @@ func main() {
 		log.Fatal(err)
 	}
 	pprof.StartCPUProfile(f)
-	fi, err := os.Open("qrcode3.png")
+	fi, err := os.Open("qrcode2.png")
 	if !check(err) {
 		return
 	}
 	defer fi.Close()
-	qrcode.Debug = true
+	qrcode.Debug = false
 	qrmatrix, err := qrcode.Decode(fi)
 	check(err)
 	logger.Println(qrmatrix.Content)
@@ -29,5 +28,8 @@ func main() {
 }
 
 func check(err error) bool {
-	return utils.Check(err)
+	if err != nil {
+		logger.Println(err)
+	}
+	return err == nil
 }
