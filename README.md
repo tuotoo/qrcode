@@ -7,7 +7,7 @@ The project is being developed,Not need zbar.
 1. 动态二值化
 2. 提升图片扫描的速度:OK
 3. 修复大version时丢失行的bug
-4. 容错码纠正数据
+4. 容错码纠正数据:OK
 5. 数据编码方式
     Numbert
     alphanumeric

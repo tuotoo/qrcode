@@ -933,7 +933,7 @@ func QRReconstruct(data, ecc []byte) []byte {
 	if err != nil {
 		logger.Panicf("Got error: %s", err)
 	}
-	if nbErrors != 0{
+	if nbErrors != 0 && Debug{
 		logger.Println("nbErrors",nbErrors)
 		logger.Println("orgdata vs lastdata")
 		logger.Println(StringBool(Byte2Bool(orgdata)))
