@@ -2,7 +2,6 @@ package qrcode
 
 import (
 	"fmt"
-	"github.com/klauspost/reedsolomon"
 	"image"
 	"image/color"
 	"image/draw"
@@ -16,6 +15,8 @@ import (
 	"runtime"
 	"strconv"
 	"time"
+	"github.com/maruel/rs"
+	"git.spiritframe.com/tuotoo/utils"
 )
 
 var logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Llongfile)
@@ -463,7 +464,7 @@ func ParseBlock(m *Matrix, data []bool) []bool {
 
 	result := []byte{}
 	for i, _ := range dataBlocks {
-		blockbyte := BchReconstruct(Bool2Byte(dataBlocks[i]), Bool2Byte(errorBlocks[i]))
+		blockbyte := QRReconstruct(Bool2Byte(dataBlocks[i]), Bool2Byte(errorBlocks[i]))
 		result = append(result, blockbyte[:len(Bool2Byte(dataBlocks[i]))]...)
 	}
 	return Byte2Bool(result)
@@ -924,38 +925,24 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	return qrmatrix, nil
 }
 
-func BchReconstruct(datacodebyte, errorcodebyte []byte) []byte {
-	codelist := make([][]byte, len(datacodebyte)+len(errorcodebyte))
-	for i, _ := range datacodebyte {
-		codelist[i] = []byte{datacodebyte[i]}
+func QRReconstruct(data, ecc []byte) []byte {
+	d := rs.NewDecoder(rs.QRCodeField256)
+	orgdata := utils.Copy(data).([]byte)
+	orgecc := utils.Copy(ecc).([]byte)
+	nbErrors, err := d.Decode(data, ecc)
+	if err != nil {
+		logger.Panicf("Got error: %s", err)
 	}
-	for i, _ := range errorcodebyte {
-		codelist[len(datacodebyte)+i] = []byte{errorcodebyte[i]}
+	if nbErrors != 0{
+		logger.Println("nbErrors",nbErrors)
+		logger.Println("orgdata vs lastdata")
+		logger.Println(StringBool(Byte2Bool(orgdata)))
+		logger.Println(StringBool(Byte2Bool(data)))
+		logger.Println("orgecc vs lastdata")
+		logger.Println(StringBool(Byte2Bool(orgecc)))
+		logger.Println(StringBool(Byte2Bool(ecc)))
 	}
-	enc, err := reedsolomon.New(len(datacodebyte), len(errorcodebyte))
-	check(err)
-	ok, err := enc.Verify(codelist)
-	check(err)
-	if !ok {
-
-		err = enc.Reconstruct(codelist)
-		check(err)
-
-		ok, err = enc.Verify(codelist)
-		if !ok {
-			logger.Println(codelist)
-			logger.Println("Verification failed after reconstruction, data likely corrupted.")
-		}
-	}
-	rightcodebyte := []byte{}
-	for i, _ := range datacodebyte {
-		rightcodebyte = append(rightcodebyte, codelist[i][0])
-	}
-	if !ok && Debug {
-		logger.Print("before reconstruct:", StringBool(Byte2Bool(datacodebyte)))
-		logger.Print("after  reconstruct:", StringBool(Byte2Bool(rightcodebyte)))
-	}
-	return rightcodebyte
+	return data
 }
 
 // Copy creates a deep copy of whatever is passed to it and returns the copy
