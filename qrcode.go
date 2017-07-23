@@ -174,7 +174,7 @@ func (m *Matrix) DataArea() *Matrix {
 	}
 	//Version Information 在 >= Version 7以上，需要预留两块3 x 6的区域存放一些版本信息。
 	if version >= 7 {
-		for i := maxpos -11; i < maxpos-8; i++ {
+		for i := maxpos -10; i < maxpos-7; i++ {
 			for j := 0; j < 6; j++ {
 				da.Points[i][j] = false
 				da.Points[j][i] = false
