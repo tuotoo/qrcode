@@ -896,7 +896,7 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 }
 
 func Decode(fi io.Reader) (*Matrix, error) {
-	img, err := png.Decode(fi)
+	img, _, err := image.Decode(fi)
 	if !check(err) {
 		return nil, err
 	}
@@ -930,6 +930,8 @@ func QRReconstruct(data, ecc []byte) []byte {
 	orgecc := Copy(ecc).([]byte)
 	nbErrors, err := d.Decode(data, ecc)
 	if err != nil {
+		logger.Println("data: %s", data)
+		logger.Println("ecc: %s", ecc)
 		logger.Panicf("Got error: %s", err)
 	}
 	if nbErrors != 0 && Debug {
