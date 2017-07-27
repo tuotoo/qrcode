@@ -160,7 +160,7 @@ func (m *Matrix) DataArea() *Matrix {
 	}
 	//Version Information 在 >= Version 7以上，需要预留两块3 x 6的区域存放一些版本信息。
 	if version >= 7 {
-		for i := maxpos -10; i < maxpos-7; i++ {
+		for i := maxpos - 10; i < maxpos-7; i++ {
 			for j := 0; j < 6; j++ {
 				da.Points[i][j] = false
 				da.Points[j][i] = false
@@ -367,14 +367,14 @@ func Kong(group *PosGroup) bool {
 		min := -1
 		max := -1
 		for x := group.Min.X; x <= group.Max.X; x++ {
-			if group.GroupMap[Pos{x,y}]{
-				if min <0{
-					min=x
+			if group.GroupMap[Pos{x, y}] {
+				if min < 0 {
+					min = x
 				}
 				max = x
 			}
 		}
-		count = count-(max -min +1)
+		count = count - (max - min + 1)
 	}
 	return count != 0
 }
@@ -622,7 +622,7 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 }
 
 // 标线
-func (m *Matrix)Centerlist(line []bool, offset int) (li []int) {
+func (m *Matrix) Centerlist(line []bool, offset int) (li []int) {
 	submap := map[int]int{}
 	value := line[0]
 	sublength := 0
@@ -832,25 +832,33 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 		ExportGroups(matrix.OrgSize, pattern, "positionDetectionPattern"+strconv.FormatInt(int64(i), 10))
 	}
 	linewidth := LineWidth(positionDetectionPatterns)
-	logger.Println("linewidth",linewidth)
+	if Debug {
+		logger.Println("linewidth", linewidth)
+	}
 	pdp := NewPositionDetectionPattern(positionDetectionPatterns)
 
 	//顶部标线
 	topstart := &Pos{X: pdp.Topleft.Center.X + (int(3.5*linewidth) + 1), Y: pdp.Topleft.Center.Y + int(3*linewidth)}
 	topend := &Pos{X: pdp.Right.Center.X - (int(3.5*linewidth) + 1), Y: pdp.Right.Center.Y + int(3*linewidth)}
 	topTimePattens := Line(topstart, topend, matrix)
-	logger.Println("topTimePattens",topTimePattens)
+	if Debug {
+		logger.Println("topTimePattens", topTimePattens)
+	}
 	topcl := matrix.Centerlist(topTimePattens, topstart.X)
-	logger.Println("topcl",topcl)
-
+	if Debug {
+		logger.Println("topcl", topcl)
+	}
 	//左侧标线
 	leftstart := &Pos{X: pdp.Topleft.Center.X + int(3*linewidth), Y: pdp.Topleft.Center.Y + (int(3.5*linewidth) + 1)}
 	leftend := &Pos{X: pdp.Bottom.Center.X + int(3*linewidth), Y: pdp.Bottom.Center.Y - (int(3.5*linewidth) + 1)}
 	leftTimePattens := Line(leftstart, leftend, matrix)
-	logger.Println("leftTimePattens",leftTimePattens)
+	if Debug {
+		logger.Println("leftTimePattens", leftTimePattens)
+	}
 	leftcl := matrix.Centerlist(leftTimePattens, leftstart.Y)
-	logger.Println("leftcl",leftcl)
-
+	if Debug {
+		logger.Println("leftcl", leftcl)
+	}
 	qrtopcl := []int{}
 	for i := -3; i <= 3; i++ {
 		qrtopcl = append(qrtopcl, pdp.Topleft.Center.X+int(float64(i)*linewidth))
@@ -868,7 +876,9 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 	for i := -3; i <= 3; i++ {
 		qrleftcl = append(qrleftcl, pdp.Bottom.Center.Y+int(float64(i)*linewidth))
 	}
-	logger.Println("qrtopcl",qrtopcl)
+	if Debug {
+		logger.Println("qrtopcl", qrtopcl)
+	}
 	for _, y := range qrleftcl {
 		line := []bool{}
 		for _, x := range qrtopcl {
@@ -876,7 +886,9 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 		}
 		matrix.Points = append(matrix.Points, line)
 	}
-	logger.Println(matrix.Points)
+	if Debug {
+		logger.Println(matrix.Points)
+	}
 	matrix.Size = image.Rect(0, 0, len(matrix.Points), len(matrix.Points))
 	return matrix, nil
 }
@@ -888,11 +900,15 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	}
 	qrmatrix, err := DecodeImg(img)
 	check(err)
-	logger.Println("qrmatrix.Size",qrmatrix.Size)
-	logger.Println("qrmatrix.Points",len(qrmatrix.Points))
+	if Debug {
+		logger.Println("qrmatrix.Size", qrmatrix.Size)
+		logger.Println("qrmatrix.Points", len(qrmatrix.Points))
+	}
 	ExportMatrix(qrmatrix.Size, qrmatrix.Points, "bitmatrix")
 	qrErrorCorrectionLevel, qrMask := qrmatrix.FormatInfo()
-	logger.Println("qrErrorCorrectionLevel, qrMask", qrErrorCorrectionLevel, qrMask)
+	if Debug {
+		logger.Println("qrErrorCorrectionLevel, qrMask", qrErrorCorrectionLevel, qrMask)
+	}
 	maskfunc := MaskFunc(qrMask)
 	unmaskmatrix := new(Matrix)
 	for y, line := range qrmatrix.Points {
@@ -902,7 +918,9 @@ func Decode(fi io.Reader) (*Matrix, error) {
 		}
 		unmaskmatrix.Points = append(unmaskmatrix.Points, l)
 	}
-	logger.Println("Version:", unmaskmatrix.Version())
+	if Debug {
+		logger.Println("Version:", unmaskmatrix.Version())
+	}
 	ExportMatrix(qrmatrix.Size, unmaskmatrix.Points, "unmaskmatrix")
 	dataarea := unmaskmatrix.DataArea()
 	ExportMatrix(qrmatrix.Size, dataarea.Points, "mask")
@@ -918,9 +936,11 @@ func QRReconstruct(data, ecc []byte) []byte {
 	orgecc := Copy(ecc).([]byte)
 	nbErrors, err := d.Decode(data, ecc)
 	if err != nil {
-		logger.Println("data: %s", data)
-		logger.Println("ecc: %s", ecc)
-		logger.Panicf("Got error: %s", err)
+		if Debug {
+			logger.Println("data: %s", data)
+			logger.Println("ecc: %s", ecc)
+			logger.Panicf("Got error: %s", err)
+		}
 	}
 	if nbErrors != 0 && Debug {
 		logger.Println("nbErrors", nbErrors)
