@@ -623,10 +623,35 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 
 // 标线
 func (m *Matrix) Centerlist(line []bool, offset int) (li []int) {
-	value := !line[0]
+	submap := map[int]int{} //
+	value := line[0]
+	sublength := 0
+	for _, b := range line {
+		if b == value {
+			sublength += 1
+		} else {
+			_, ok := submap[sublength]
+			if ok {
+				submap[sublength] += 1
+			} else {
+				submap[sublength] = 1
+			}
+			value = b
+			sublength = 1
+		}
+	}
+	var maxcountsublength float64
+	var meansublength float64
+	for k, v := range submap {
+		if float64(v) > maxcountsublength {
+			maxcountsublength = float64(v)
+			meansublength = float64(k)
+		}
+	}
+	value = !line[0]
 	for index, b := range line {
 		if b != value {
-			li = append(li, index+offset)
+			li = append(li, index+offset+int(meansublength/2))
 			value = b
 		}
 	}
