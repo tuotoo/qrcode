@@ -623,63 +623,12 @@ func Line(start, end *Pos, matrix *Matrix) (line []bool) {
 
 // 标线
 func (m *Matrix) Centerlist(line []bool, offset int) (li []int) {
-	submap := map[int]int{}
-	value := line[0]
-	sublength := 0
-	for _, b := range line {
-		if b == value {
-			sublength += 1
-		} else {
-			_, ok := submap[sublength]
-			if ok {
-				submap[sublength] += 1
-			} else {
-				submap[sublength] = 1
-			}
+	value := !line[0]
+	for index, b := range line {
+		if b != value {
+			li = append(li, index+offset)
 			value = b
-			sublength = 1
 		}
-	}
-	maxcountsublength := 0
-	var meansublength int
-	for k, v := range submap {
-		if v > maxcountsublength {
-			maxcountsublength = v
-			meansublength = k
-		}
-	}
-	start := false
-	curvalue := false
-	curgroup := []int{}
-	for i, v := range line {
-		if v == false {
-			start = true
-		}
-		if !start {
-			continue
-		}
-		if v != curvalue {
-			if len(curgroup) > meansublength/2 && len(curgroup) < meansublength+meansublength/2 {
-				curvalue = v
-				mean := 0
-				for _, index := range curgroup {
-					mean += index
-				}
-				li = append(li, mean/len(curgroup)+offset)
-				curgroup = []int{}
-			} else {
-				curgroup = append(curgroup, i)
-			}
-		} else {
-			curgroup = append(curgroup, i)
-		}
-	}
-	if len(curgroup) > meansublength/2 && len(curgroup) < meansublength+meansublength/2 {
-		mean := 0
-		for _, index := range curgroup {
-			mean += index
-		}
-		li = append(li, mean/len(curgroup)+offset)
 	}
 	return li
 	// todo: jiaodu
@@ -885,9 +834,6 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 			line = append(line, matrix.At(x, y))
 		}
 		matrix.Points = append(matrix.Points, line)
-	}
-	if Debug {
-		logger.Println(matrix.Points)
 	}
 	matrix.Size = image.Rect(0, 0, len(matrix.Points), len(matrix.Points))
 	return matrix, nil
