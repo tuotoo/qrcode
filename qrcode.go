@@ -53,8 +53,21 @@ func (m *Matrix) At(x, y int) bool {
 
 func (m *Matrix) FormatInfo() (ErrorCorrectionLevel, Mask int) {
 	fi1 := []Pos{
-		{0, 8}, {1, 8}, {2, 8}, {3, 8}, {4, 8}, {5, 8}, {7, 8}, {8, 8},
-		{8, 7}, {8, 5}, {8, 4}, {8, 3}, {8, 2}, {8, 1}, {8, 0},
+		{0, 8},
+		{1, 8},
+		{2, 8},
+		{3, 8},
+		{4, 8},
+		{5, 8},
+		{7, 8},
+		{8, 8},
+		{8, 7},
+		{8, 5},
+		{8, 4},
+		{8, 3},
+		{8, 2},
+		{8, 1},
+		{8, 0},
 	}
 	maskedfidata := m.GetBin(fi1)
 	unmaskfidata := maskedfidata ^ 0x5412
@@ -65,8 +78,21 @@ func (m *Matrix) FormatInfo() (ErrorCorrectionLevel, Mask int) {
 	}
 	length := len(m.Points)
 	fi2 := []Pos{
-		{8, length - 1}, {8, length - 2}, {8, length - 3}, {8, length - 4}, {8, length - 5}, {8, length - 6}, {8, length - 7},
-		{length - 8, 8}, {length - 7, 8}, {length - 6, 8}, {length - 5, 8}, {length - 4, 8}, {length - 3, 8}, {length - 2, 8}, {length - 1, 8},
+		{8, length - 1},
+		{8, length - 2},
+		{8, length - 3},
+		{8, length - 4},
+		{8, length - 5},
+		{8, length - 6},
+		{8, length - 7},
+		{length - 8, 8},
+		{length - 7, 8},
+		{length - 6, 8},
+		{length - 5, 8},
+		{length - 4, 8},
+		{length - 3, 8},
+		{length - 2, 8},
+		{length - 1, 8},
 	}
 	maskedfidata = m.GetBin(fi2)
 	unmaskfidata = maskedfidata ^ 0x5412
@@ -103,7 +129,7 @@ type Pos struct {
 func bch(org int) int {
 	var g int = 0x537
 	for i := 4; i > -1; i-- {
-		if org&(1<<(uint(i+10))) > 0 {
+		if org&(1<<(uint(i + 10))) > 0 {
 			org ^= g << uint(i)
 		}
 	}
@@ -521,8 +547,8 @@ func GetData(unmaskmatrix, dataarea *Matrix) []bool {
 func Bits2Bytes(datacode []bool, version int) []byte {
 	format := Bit2Int(datacode[0:4])
 	offset := GetDataEncoder(version).CharCountBits(format)
-	length := Bit2Int(datacode[4 : 4+offset])
-	datacode = datacode[4+offset : length*8+4+offset]
+	length := Bit2Int(datacode[4: 4+offset])
+	datacode = datacode[4+offset: length*8+4+offset]
 	result := []byte{}
 	for i := 0; i < length*8; {
 		result = append(result, Bit2Byte(datacode[i:i+8]))

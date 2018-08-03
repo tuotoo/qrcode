@@ -1,0 +1,5 @@
+package qrcode
+
+func Detection(){
+
+}
