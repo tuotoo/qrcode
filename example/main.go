@@ -4,19 +4,14 @@ import (
 	"github.com/tuotoo/qrcode"
 	"log"
 	"os"
-	"runtime/pprof"
+	"time"
 )
 
-var logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Lshortfile)
+var logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 
 func main() {
-	f, err := os.Create("cpu-profile.prof")
-	if err != nil {
-		log.Fatal(err)
-	}
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
-	fi, err := os.Open("qrcode12.png")
+	startAt :=time.Now()
+	fi, err := os.Open("qrcode11.png")
 	if !check(err) {
 		return
 	}
@@ -27,6 +22,7 @@ func main() {
 		return
 	}
 	logger.Println(qrMatrix.Content)
+	logger.Println(time.Now().Sub(startAt))
 }
 
 func check(err error) bool {
