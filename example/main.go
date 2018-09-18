@@ -7,7 +7,7 @@ import (
 	"runtime/pprof"
 )
 
-var logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Llongfile)
+var logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Lshortfile)
 
 func main() {
 	f, err := os.Create("cpu-profile.prof")
@@ -15,16 +15,18 @@ func main() {
 		log.Fatal(err)
 	}
 	pprof.StartCPUProfile(f)
-	fi, err := os.Open("qrcode.jpg")
+	defer pprof.StopCPUProfile()
+	fi, err := os.Open("qrcode12.png")
 	if !check(err) {
 		return
 	}
 	defer fi.Close()
-	qrcode.Debug = true
-	qrmatrix, err := qrcode.Decode(fi)
-	check(err)
-	logger.Println(qrmatrix.Content)
-	pprof.StopCPUProfile()
+	qrcode.SetDebug(false)
+	qrMatrix, err := qrcode.Decode(fi)
+	if !check(err){
+		return
+	}
+	logger.Println(qrMatrix.Content)
 }
 
 func check(err error) bool {
