@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/maruel/rs"
 )
 
@@ -770,7 +771,7 @@ func (mx *Matrix) SplitGroups() [][]Pos {
 	return groups
 }
 
-func (mx *Matrix) ReadImage() {
+func (mx *Matrix) ReadImage(batchPath string) {
 	mx.OrgSize = mx.OrgImage.Bounds()
 	width := mx.OrgSize.Dx()
 	height := mx.OrgSize.Dy()
@@ -788,13 +789,14 @@ func (mx *Matrix) ReadImage() {
 		}
 		mx.OrgPoints = append(mx.OrgPoints, line)
 	}
-	ExportMatrix(mx.OrgSize, mx.OrgPoints, "mx")
+	ExportMatrix(mx.OrgSize, mx.OrgPoints, filepath.Join(batchPath, "mx"))
 }
 
-func DecodeImg(img image.Image) (*Matrix, error) {
+func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 	matrix := new(Matrix)
 	matrix.OrgImage = img
-	matrix.ReadImage()
+
+	matrix.ReadImage(batchPath)
 
 	groups := matrix.SplitGroups()
 	// 判断空心
@@ -812,7 +814,7 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 			solid = append(solid, newGroup)
 		}
 	}
-	ExportEveryGroup(matrix.OrgSize, groups, "groups/groups")
+	ExportEveryGroup(matrix.OrgSize, groups, filepath.Join(batchPath, "groups", "groups"))
 	var positionDetectionPatterns [][]*PosGroup
 	for _, solidGroup := range solid {
 		for _, hollowGroup := range hollow {
@@ -822,7 +824,7 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 		}
 	}
 	for i, pattern := range positionDetectionPatterns {
-		ExportGroups(matrix.OrgSize, pattern, "positionDetectionPattern"+strconv.FormatInt(int64(i), 10))
+		ExportGroups(matrix.OrgSize, pattern, filepath.Join(batchPath, "positionDetectionPattern"+strconv.Itoa(i)))
 	}
 	lineWidth := LineWidth(positionDetectionPatterns)
 	if debug {
@@ -891,7 +893,9 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	if !check(err) {
 		return nil, err
 	}
-	qrMatrix, err := DecodeImg(img)
+	batchID := uuid.New().String()
+	batchPath := filepath.Join(os.TempDir(), "tuotoo", "qrcode", batchID)
+	qrMatrix, err := DecodeImg(img, batchPath)
 	if !check(err) {
 		return nil, err
 	}
@@ -899,7 +903,7 @@ func Decode(fi io.Reader) (*Matrix, error) {
 		logger.Println("qrMatrix.Size", qrMatrix.Size)
 		logger.Println("qrMatrix.Points", len(qrMatrix.Points))
 	}
-	err = ExportMatrix(qrMatrix.Size, qrMatrix.Points, "bitMatrix")
+	err = ExportMatrix(qrMatrix.Size, qrMatrix.Points, filepath.Join(batchPath, "bitMatrix"))
 	if !check(err) {
 		return nil, err
 	}
@@ -919,9 +923,9 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	if debug {
 		logger.Println("Version:", unmaskMatrix.Version())
 	}
-	ExportMatrix(qrMatrix.Size, unmaskMatrix.Points, "unmaskMatrix")
+	ExportMatrix(qrMatrix.Size, unmaskMatrix.Points, filepath.Join(batchPath, "unmaskMatrix"))
 	dataArea := unmaskMatrix.DataArea()
-	ExportMatrix(qrMatrix.Size, dataArea.Points, "mask")
+	ExportMatrix(qrMatrix.Size, dataArea.Points, filepath.Join(batchPath, "mask"))
 	dataCode := ParseBlock(qrMatrix, GetData(unmaskMatrix, dataArea))
 	bt := Bits2Bytes(dataCode, unmaskMatrix.Version())
 	qrMatrix.Content = string(bt)
