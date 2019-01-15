@@ -59,7 +59,11 @@ func (mx *Matrix) At(x, y int) bool {
 	return mx.OrgPoints[y][x]
 }
 
-func (mx *Matrix) FormatInfo() (ErrorCorrectionLevel, Mask int) {
+type FormatInfo struct {
+	ErrorCorrectionLevel, Mask int
+}
+
+func (mx *Matrix) FormatInfo() (*FormatInfo, error) {
 	fi1 := []Pos{
 		{0, 8}, {1, 8}, {2, 8}, {3, 8},
 		{4, 8}, {5, 8}, {7, 8},
@@ -69,9 +73,10 @@ func (mx *Matrix) FormatInfo() (ErrorCorrectionLevel, Mask int) {
 	maskedFileData := mx.GetBin(fi1)
 	unmaskFileData := maskedFileData ^ 0x5412
 	if bch(unmaskFileData) == 0 {
-		ErrorCorrectionLevel = unmaskFileData >> 13
-		Mask = unmaskFileData >> 10 & 7
-		return
+		return &FormatInfo{
+			ErrorCorrectionLevel: unmaskFileData >> 13,
+			Mask:                 unmaskFileData >> 10 & 7,
+		}, nil
 	}
 	length := len(mx.Points)
 	fi2 := []Pos{
@@ -83,11 +88,12 @@ func (mx *Matrix) FormatInfo() (ErrorCorrectionLevel, Mask int) {
 	maskedFileData = mx.GetBin(fi2)
 	unmaskFileData = maskedFileData ^ 0x5412
 	if bch(unmaskFileData) == 0 {
-		ErrorCorrectionLevel = unmaskFileData >> 13
-		Mask = unmaskFileData >> 10 & 7
-		return
+		return &FormatInfo{
+			ErrorCorrectionLevel: unmaskFileData >> 13,
+			Mask:                 unmaskFileData >> 10 & 7,
+		}, nil
 	}
-	panic("not found error correction level and mask")
+	return nil, errors.New("not found error correction level and mask")
 }
 
 func (mx *Matrix) GetBin(poss []Pos) int {
@@ -137,17 +143,17 @@ func (mx *Matrix) DataArea() *Matrix {
 	// 这三个定位图案有白边叫Separators for Position Detection Patterns。之所以三个而不是四个意思就是三个就可以标识一个矩形了。
 	for y := 0; y < 9; y++ {
 		for x := 0; x < 9; x++ {
-			da.Points[y][x] = false //左上
+			da.Points[y][x] = false // 左上
 		}
 	}
 	for y := 0; y < 9; y++ {
 		for x := 0; x < 8; x++ {
-			da.Points[y][maxPos-x] = false //右上
+			da.Points[y][maxPos-x] = false // 右上
 		}
 	}
 	for y := 0; y < 8; y++ {
 		for x := 0; x < 9; x++ {
-			da.Points[maxPos-y][x] = false //左下
+			da.Points[maxPos-y][x] = false // 左下
 		}
 	}
 	// Timing Patterns也是用于定位的。原因是二维码有40种尺寸，尺寸过大了后需要有根标准线，不然扫描的时候可能会扫歪了。
@@ -155,7 +161,7 @@ func (mx *Matrix) DataArea() *Matrix {
 		da.Points[6][i] = false
 		da.Points[i][6] = false
 	}
-	//Alignment Patterns 只有Version 2以上（包括Version2）的二维码需要这个东东，同样是为了定位用的。
+	// Alignment Patterns 只有Version 2以上（包括Version2）的二维码需要这个东东，同样是为了定位用的。
 	version := da.Version()
 	Alignments := AlignmentPatternCenter[version]
 	for _, AlignmentX := range Alignments {
@@ -170,7 +176,7 @@ func (mx *Matrix) DataArea() *Matrix {
 			}
 		}
 	}
-	//Version Information 在 >= Version 7以上，需要预留两块3 x 6的区域存放一些版本信息。
+	// Version Information 在 >= Version 7以上，需要预留两块3 x 6的区域存放一些版本信息。
 	if version >= 7 {
 		for i := maxPos - 10; i < maxPos-7; i++ {
 			for j := 0; j < 6; j++ {
@@ -316,19 +322,19 @@ func CenterPoint(group []Pos) Pos {
 
 func MaskFunc(code int) func(x, y int) bool {
 	switch code {
-	case 0: //000
+	case 0: // 000
 		return func(x, y int) bool {
 			return (x+y)%2 == 0
 		}
-	case 1: //001
+	case 1: // 001
 		return func(x, y int) bool {
 			return y%2 == 0
 		}
-	case 2: //010
+	case 2: // 010
 		return func(x, y int) bool {
 			return x%3 == 0
 		}
-	case 3: //011
+	case 3: // 011
 		return func(x, y int) bool {
 			return (x+y)%3 == 0
 		}
@@ -394,12 +400,15 @@ func Hollow(group *PosGroup) bool {
 	return count != 0
 }
 
-func ParseBlock(m *Matrix, data []bool) []bool {
+func ParseBlock(m *Matrix, data []bool) ([]bool, error) {
 	version := m.Version()
-	level, _ := m.FormatInfo()
+	info, err := m.FormatInfo()
+	if err != nil {
+		return nil, err
+	}
 	var qrCodeVersion = QRcodeVersion{}
 	for _, qrCV := range Versions {
-		if qrCV.Level == RecoveryLevel(level) && qrCV.Version == version {
+		if qrCV.Level == RecoveryLevel(info.ErrorCorrectionLevel) && qrCV.Version == version {
 			qrCodeVersion = qrCV
 		}
 	}
@@ -454,10 +463,13 @@ func ParseBlock(m *Matrix, data []bool) []bool {
 
 	var result []byte
 	for i := range dataBlocks {
-		blockByte := QRReconstruct(Bool2Byte(dataBlocks[i]), Bool2Byte(errorBlocks[i]))
+		blockByte, err := QRReconstruct(Bool2Byte(dataBlocks[i]), Bool2Byte(errorBlocks[i]))
+		if err != nil {
+			return nil, err
+		}
 		result = append(result, blockByte[:len(Bool2Byte(dataBlocks[i]))]...)
 	}
-	return Byte2Bool(result)
+	return Byte2Bool(result), nil
 }
 
 func Byte2Bool(bl []byte) []bool {
@@ -834,7 +846,7 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 	if !check(err) {
 		return nil, err
 	}
-	//顶部标线
+	// 顶部标线
 	topStart := &Pos{X: pdp.TopLeft.Center.X + (int(3.5*lineWidth) + 1), Y: pdp.TopLeft.Center.Y + int(3*lineWidth)}
 	topEnd := &Pos{X: pdp.Right.Center.X - (int(3.5*lineWidth) + 1), Y: pdp.Right.Center.Y + int(3*lineWidth)}
 	topTimePattens := Line(topStart, topEnd, matrix)
@@ -845,7 +857,7 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 	if debug {
 		logger.Println("topCL", topCL)
 	}
-	//左侧标线
+	// 左侧标线
 	leftStart := &Pos{X: pdp.TopLeft.Center.X + int(3*lineWidth), Y: pdp.TopLeft.Center.Y + (int(3.5*lineWidth) + 1)}
 	leftEnd := &Pos{X: pdp.Bottom.Center.X + int(3*lineWidth), Y: pdp.Bottom.Center.Y - (int(3.5*lineWidth) + 1)}
 	leftTimePattens := Line(leftStart, leftEnd, matrix)
@@ -907,11 +919,11 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	if !check(err) {
 		return nil, err
 	}
-	qrErrorCorrectionLevel, qrMask := qrMatrix.FormatInfo()
-	if debug {
-		logger.Println("qrErrorCorrectionLevel, qrMask", qrErrorCorrectionLevel, qrMask)
+	info, err := qrMatrix.FormatInfo()
+	if err != nil {
+		return nil, err
 	}
-	maskFunc := MaskFunc(qrMask)
+	maskFunc := MaskFunc(info.Mask)
 	unmaskMatrix := new(Matrix)
 	for y, line := range qrMatrix.Points {
 		var l []bool
@@ -926,34 +938,21 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	ExportMatrix(qrMatrix.Size, unmaskMatrix.Points, filepath.Join(batchPath, "unmaskMatrix"))
 	dataArea := unmaskMatrix.DataArea()
 	ExportMatrix(qrMatrix.Size, dataArea.Points, filepath.Join(batchPath, "mask"))
-	dataCode := ParseBlock(qrMatrix, GetData(unmaskMatrix, dataArea))
+	dataCode, err := ParseBlock(qrMatrix, GetData(unmaskMatrix, dataArea))
+	if err != nil {
+		return nil, err
+	}
 	bt := Bits2Bytes(dataCode, unmaskMatrix.Version())
 	qrMatrix.Content = string(bt)
 	return qrMatrix, nil
 }
 
-func QRReconstruct(data, ecc []byte) []byte {
-	d := rs.NewDecoder(rs.QRCodeField256)
-	origData := Copy(data).([]byte)
-	origEcc := Copy(ecc).([]byte)
-	nbErrors, err := d.Decode(data, ecc)
+func QRReconstruct(data, ecc []byte) ([]byte, error) {
+	_, err := rs.NewDecoder(rs.QRCodeField256).Decode(data, ecc)
 	if err != nil {
-		if debug {
-			logger.Printf("data: %s", data)
-			logger.Printf("ecc: %s", ecc)
-			logger.Printf("Got error: %s", err.Error())
-		}
+		return nil, err
 	}
-	if nbErrors != 0 && debug {
-		logger.Println("nbErrors", nbErrors)
-		logger.Println("origData vs lastdata")
-		logger.Println(StringBool(Byte2Bool(origData)))
-		logger.Println(StringBool(Byte2Bool(data)))
-		logger.Println("origEcc vs lastdata")
-		logger.Println(StringBool(Byte2Bool(origEcc)))
-		logger.Println(StringBool(Byte2Bool(ecc)))
-	}
-	return data
+	return data, nil
 }
 
 // Copy creates a deep copy of whatever is passed to it and returns the copy
