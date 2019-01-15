@@ -575,17 +575,34 @@ func GetData(unmaskMatrix, dataArea *Matrix) []bool {
 	return data
 }
 
-func Bits2Bytes(dataCode []bool, version int) []byte {
+func Bits2Bytes(dataCode []bool, version int) ([]byte, error) {
 	format := Bit2Int(dataCode[0:4])
-	offset := GetDataEncoder(version).CharCountBits(format)
+	encoder, err := GetDataEncoder(version)
+	if err != nil {
+		return nil, err
+	}
+	offset, err := encoder.CharCountBits(format)
+	if err != nil {
+		return nil, err
+	}
 	length := Bit2Int(dataCode[4 : 4+offset])
-	dataCode = dataCode[4+offset : length*8+4+offset]
+	lpos := 4 + offset
+	hpos := length*8 + 4 + offset
+	size := len(dataCode)
+	if hpos > size-1 {
+		hpos = size - 1
+	}
 	var result []byte
-	for i := 0; i < length*8; {
-		result = append(result, Bit2Byte(dataCode[i:i+8]))
+	dataCode = dataCode[lpos:hpos]
+	for i := 0; i < length*8 && i < size; {
+		ipos := i + 8
+		if ipos > size-1 {
+			ipos = size - 1
+		}
+		result = append(result, Bit2Byte(dataCode[i:ipos]))
 		i += 8
 	}
-	return result
+	return result, nil
 }
 
 func StringBool(dataCode []bool) string {
@@ -725,10 +742,7 @@ func ExportEveryGroup(size image.Rectangle, hollow [][]Pos, filename string) {
 	}
 }
 
-func ExportGroups(size image.Rectangle, hollow []*PosGroup, filename string) {
-	if !debug {
-		return
-	}
+func ExportGroups(size image.Rectangle, hollow []*PosGroup, filename string) error {
 	result := image.NewGray(size)
 	for _, group := range hollow {
 		for _, pos := range group.Group {
@@ -736,11 +750,11 @@ func ExportGroups(size image.Rectangle, hollow []*PosGroup, filename string) {
 		}
 	}
 	outImg, err := os.Create(filename + ".png")
-	if !check(err) {
-		panic(err)
+	if err != nil {
+		return err
 	}
 	defer outImg.Close()
-	png.Encode(outImg, result)
+	return png.Encode(outImg, result)
 }
 
 // ExportGroup debug模式将二值化数据导出到图片
@@ -972,7 +986,10 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	if err != nil {
 		return nil, err
 	}
-	bt := Bits2Bytes(dataCode, unmaskMatrix.Version())
+	bt, err := Bits2Bytes(dataCode, unmaskMatrix.Version())
+	if err != nil {
+		return nil, err
+	}
 	qrMatrix.Content = string(bt)
 	return qrMatrix, nil
 }
