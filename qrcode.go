@@ -1,8 +1,8 @@
 package qrcode
 
 import (
+	"errors"
 	"fmt"
-	"github.com/maruel/rs"
 	"image"
 	"image/color"
 	"image/draw"
@@ -12,12 +12,13 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
 	"time"
-	"errors"
-	"path/filepath"
+
+	"github.com/maruel/rs"
 )
 
 var logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -113,7 +114,7 @@ type Pos struct {
 func bch(org int) int {
 	var g = 0x537
 	for i := 4; i > -1; i-- {
-		if org&(1<<(uint(i + 10))) > 0 {
+		if org&(1<<(uint(i+10))) > 0 {
 			org ^= g << uint(i)
 		}
 	}
