@@ -9,26 +9,16 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"io"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/maruel/rs"
 )
-
-var logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-
-var debug = false
-
-func SetDebug(enable bool) {
-	debug = enable
-}
 
 type PositionDetectionPatterns struct {
 	TopLeft *PosGroup
@@ -300,24 +290,6 @@ func PossToGroup(group []Pos) *PosGroup {
 	posGroup.Max = Pos{X: maxX, Y: maxY}
 	posGroup.Hollow = Hollow(posGroup)
 	return posGroup
-}
-
-func check(err error, backLevel ...int) (ok bool) {
-
-	if err != nil {
-		if debug {
-			level := 1
-			if len(backLevel) != 0 {
-				level = backLevel[0]
-			}
-			_, filename, line, _ := runtime.Caller(level)
-			logger.Println(filepath.Base(filename), line, err)
-		}
-		ok = false
-	} else {
-		ok = true
-	}
-	return
 }
 
 func Rectangle(group []Pos) (minX, maxX, minY, maxY int) {
@@ -733,15 +705,6 @@ func (mx *Matrix) CenterList(line []bool, offset int) (li []int) {
 	// TODO: 多角度识别
 }
 
-func ExportEveryGroup(size image.Rectangle, hollow [][]Pos, filename string) {
-	if !debug {
-		return
-	}
-	for i, group := range hollow {
-		ExportGroup(size, group, filename+strconv.FormatInt(int64(i), 10))
-	}
-}
-
 func ExportGroups(size image.Rectangle, hollow []*PosGroup, filename string) error {
 	result := image.NewGray(size)
 	for _, group := range hollow {
@@ -755,51 +718,6 @@ func ExportGroups(size image.Rectangle, hollow []*PosGroup, filename string) err
 	}
 	defer outImg.Close()
 	return png.Encode(outImg, result)
-}
-
-// ExportGroup debug模式将二值化数据导出到图片
-func ExportGroup(size image.Rectangle, group []Pos, filename string) error {
-	if !debug {
-		return nil
-	}
-	img := image.NewGray(size)
-	for _, pos := range group {
-		img.Set(pos.X, pos.Y, color.White)
-	}
-	file, err := os.Create(filename + ".png")
-	if !check(err) {
-		return err
-	}
-	defer file.Close()
-	err = png.Encode(file, img)
-	check(err)
-	return err
-}
-
-func ExportMatrix(size image.Rectangle, points [][]bool, filename string) error {
-	if !debug {
-		return nil
-	}
-	img := image.NewGray(size)
-	for y, line := range points {
-		for x, value := range line {
-			var c color.Color
-			if value {
-				c = color.Black
-			} else {
-				c = color.White
-			}
-			img.Set(x, y, c)
-		}
-	}
-	file, err := os.Create(filename + ".png")
-	if !check(err) {
-		return err
-	}
-	defer file.Close()
-	err = png.Encode(file, img)
-	check(err)
-	return err
 }
 
 func (mx *Matrix) Binarization() uint8 {
@@ -845,7 +763,6 @@ func (mx *Matrix) ReadImage(batchPath string) {
 		}
 		mx.OrgPoints = append(mx.OrgPoints, line)
 	}
-	ExportMatrix(mx.OrgSize, mx.OrgPoints, filepath.Join(batchPath, "mx"))
 }
 
 func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
@@ -870,7 +787,6 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 			solid = append(solid, newGroup)
 		}
 	}
-	ExportEveryGroup(matrix.OrgSize, groups, filepath.Join(batchPath, "groups", "groups"))
 	var positionDetectionPatterns [][]*PosGroup
 	for _, solidGroup := range solid {
 		for _, hollowGroup := range hollow {
@@ -883,35 +799,20 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 		ExportGroups(matrix.OrgSize, pattern, filepath.Join(batchPath, "positionDetectionPattern"+strconv.Itoa(i)))
 	}
 	lineWidth := LineWidth(positionDetectionPatterns)
-	if debug {
-		logger.Println("lineWidth", lineWidth)
-	}
 	pdp, err := NewPositionDetectionPattern(positionDetectionPatterns)
-	if !check(err) {
+	if err != nil {
 		return nil, err
 	}
 	// 顶部标线
 	topStart := &Pos{X: pdp.TopLeft.Center.X + (int(3.5*lineWidth) + 1), Y: pdp.TopLeft.Center.Y + int(3*lineWidth)}
 	topEnd := &Pos{X: pdp.Right.Center.X - (int(3.5*lineWidth) + 1), Y: pdp.Right.Center.Y + int(3*lineWidth)}
 	topTimePattens := Line(topStart, topEnd, matrix)
-	if debug {
-		logger.Println("topTimePattens", topTimePattens)
-	}
 	topCL := matrix.CenterList(topTimePattens, topStart.X)
-	if debug {
-		logger.Println("topCL", topCL)
-	}
 	// 左侧标线
 	leftStart := &Pos{X: pdp.TopLeft.Center.X + int(3*lineWidth), Y: pdp.TopLeft.Center.Y + (int(3.5*lineWidth) + 1)}
 	leftEnd := &Pos{X: pdp.Bottom.Center.X + int(3*lineWidth), Y: pdp.Bottom.Center.Y - (int(3.5*lineWidth) + 1)}
 	leftTimePattens := Line(leftStart, leftEnd, matrix)
-	if debug {
-		logger.Println("leftTimePattens", leftTimePattens)
-	}
 	leftCL := matrix.CenterList(leftTimePattens, leftStart.Y)
-	if debug {
-		logger.Println("leftCL", leftCL)
-	}
 	var qrTopCL []int
 	for i := -3; i <= 3; i++ {
 		qrTopCL = append(qrTopCL, pdp.TopLeft.Center.X+int(float64(i)*lineWidth))
@@ -929,9 +830,6 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 	for i := -3; i <= 3; i++ {
 		qrLeftCL = append(qrLeftCL, pdp.Bottom.Center.Y+int(float64(i)*lineWidth))
 	}
-	if debug {
-		logger.Println("qrTopCL", qrTopCL)
-	}
 	for _, y := range qrLeftCL {
 		var line []bool
 		for _, x := range qrTopCL {
@@ -946,21 +844,13 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 // Decode 二维码识别函数
 func Decode(fi io.Reader) (*Matrix, error) {
 	img, _, err := image.Decode(fi)
-	if !check(err) {
+	if err != nil {
 		return nil, err
 	}
 	batchID := uuid.New().String()
 	batchPath := filepath.Join(os.TempDir(), "tuotoo", "qrcode", batchID)
 	qrMatrix, err := DecodeImg(img, batchPath)
-	if !check(err) {
-		return nil, err
-	}
-	if debug {
-		logger.Println("qrMatrix.Size", qrMatrix.Size)
-		logger.Println("qrMatrix.Points", len(qrMatrix.Points))
-	}
-	err = ExportMatrix(qrMatrix.Size, qrMatrix.Points, filepath.Join(batchPath, "bitMatrix"))
-	if !check(err) {
+	if err != nil {
 		return nil, err
 	}
 	info, err := qrMatrix.FormatInfo()
@@ -976,12 +866,7 @@ func Decode(fi io.Reader) (*Matrix, error) {
 		}
 		unmaskMatrix.Points = append(unmaskMatrix.Points, l)
 	}
-	if debug {
-		logger.Println("Version:", unmaskMatrix.Version())
-	}
-	ExportMatrix(qrMatrix.Size, unmaskMatrix.Points, filepath.Join(batchPath, "unmaskMatrix"))
 	dataArea := unmaskMatrix.DataArea()
-	ExportMatrix(qrMatrix.Size, dataArea.Points, filepath.Join(batchPath, "mask"))
 	dataCode, err := ParseBlock(qrMatrix, GetData(unmaskMatrix, dataArea))
 	if err != nil {
 		return nil, err
