@@ -8,7 +8,7 @@ import (
 )
 
 func TestDecode(t *testing.T) {
-	err := filepath.Walk("./example", func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk("example", func(path string, info os.FileInfo, err error) error {
 		fileExt := filepath.Ext(path)
 		if fileExt == ".jpg" || fileExt == ".png" {
 			defer func() {
@@ -31,7 +31,7 @@ func TestDecode(t *testing.T) {
 				t.Log("decode err", path, err)
 				return nil
 			}
-			t.Log(qr.Content)
+			t.Log(path, qr.Content)
 			t.Log(time.Since(startAt))
 		}
 		return nil
