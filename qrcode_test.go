@@ -1,6 +1,7 @@
 package qrcode
 
 import (
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,6 +42,27 @@ Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
 		if qr.Content != tt.out {
 			t.Errorf("expect: %s, got: %s", tt.out, qr.Content)
 		}
+
+		f2, _ := os.Create(filepath.Join("example", "interception", tt.in))
+		png.Encode(f2, qr.NewImageWithBorder(5))
+
+		t.Log(time.Since(startAt))
+	}
+
+	for _, tt := range tests {
+		f, err := os.Open(filepath.Join("example", "interception", tt.in))
+		if err != nil {
+			t.Fatal(err)
+		}
+		startAt := time.Now()
+		qr, err := Decode(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if qr.Content != tt.out {
+			t.Errorf("expect: %s, got: %s", tt.out, qr.Content)
+		}
+
 		t.Log(time.Since(startAt))
 	}
 }

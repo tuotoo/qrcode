@@ -37,12 +37,33 @@ type PosGroup struct {
 
 type Matrix struct {
 	OrgImage  image.Image
+	NewImage  image.Image
 	OrgSize   image.Rectangle
 	OrgPoints [][]bool
 	Points    [][]bool
 	Size      image.Rectangle
 	Data      []bool
 	Content   string
+}
+
+func (mx *Matrix) NewImageWithBorder(px int) image.Image {
+	bound := mx.NewImage.Bounds()
+	originWidth := bound.Max.X
+	newWidth := originWidth + (px * 2)
+
+	newImage := image.NewRGBA(image.Rect(0, 0, newWidth, newWidth))
+
+	for x := 0; x < newWidth; x++ {
+		for y := 0; y < newWidth; y++ {
+			if x < px || y < px || x >= (originWidth+px) || y >= (originWidth+px) {
+				newImage.Set(x, y, color.White)
+			} else {
+				newImage.Set(x, y, mx.NewImage.At(x-px, y-px))
+			}
+		}
+	}
+
+	return newImage
 }
 
 func (mx *Matrix) AtOrgPoints(x, y int) bool {
@@ -765,6 +786,19 @@ func (mx *Matrix) ReadImage(batchPath string) {
 	}
 }
 
+func interceptQrcode(img image.Image, leftTop Pos, width int) image.Image {
+	newRGBA := image.NewRGBA(image.Rect(0, 0, width, width))
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < width; y++ {
+			colorRgb := img.At(x+leftTop.X, y+leftTop.Y)
+			newRGBA.Set(x, y, colorRgb)
+		}
+	}
+
+	return newRGBA
+}
+
 func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 	matrix := new(Matrix)
 	matrix.OrgImage = img
@@ -803,6 +837,8 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	matrix.NewImage = interceptQrcode(img, Pos{X: pdp.TopLeft.Min.X, Y: pdp.TopLeft.Min.Y}, pdp.Bottom.Max.Y-pdp.TopLeft.Min.Y+1)
 	// 顶部标线
 	topStart := &Pos{X: pdp.TopLeft.Center.X + (int(3.5*lineWidth) + 1), Y: pdp.TopLeft.Center.Y + int(3*lineWidth)}
 	topEnd := &Pos{X: pdp.Right.Center.X - (int(3.5*lineWidth) + 1), Y: pdp.Right.Center.Y + int(3*lineWidth)}
