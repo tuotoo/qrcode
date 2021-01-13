@@ -548,6 +548,7 @@ func GetData(unmaskMatrix, dataArea *Matrix) []bool {
 }
 
 func Bits2Bytes(dataCode []bool, version int) ([]byte, error) {
+	//前4bit为编码格式， 后四位为真正的数据
 	mode := Bit2Int(dataCode[0:4])
 	encoder, err := GetDataEncoder(version)
 	if err != nil {
