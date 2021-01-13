@@ -10,7 +10,7 @@ This Project is Developing.
 4. 容错码纠正数据:OK
 5. 数据编码方式
     Numbert
-    alphanumeric
+    alphanumeric OK
     8-bit byte: OK
     Kanji
 6. 识别各角度倾斜的二维码
