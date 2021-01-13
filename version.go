@@ -2940,23 +2940,17 @@ type EightBitDecoder struct {
 	countIndicator int
 }
 func (d *EightBitDecoder) Decode(data []bool) ([]byte, error)  {
-	encodeLength := 8
 	dataLenght := Bit2Int(data[0:d.countIndicator])
-	hpos := dataLenght*8 + encodeLength
+	hpos := dataLenght*8 + d.countIndicator
 	size := len(data)
 	if hpos > size-1 {
 		hpos = size - 1
 	}
 	var result []byte
-	data = data[encodeLength:hpos]
+	data = data[d.countIndicator:hpos]
 
-	for i := 0; i < dataLenght*8 && i < size; {
-		ipos := i + 8
-		if ipos > size-1 {
-			ipos = size - 1
-		}
-		result = append(result, Bit2Byte(data[i:ipos]))
-		i += 8
+	for i := 0; i < dataLenght*8 && i < size; i = i + 8{
+		result = append(result, Bit2Byte(data[i:i+8]))
 	}
 	return result, nil
 }
