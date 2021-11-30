@@ -566,6 +566,7 @@ func Bits2Bytes(dataCode []bool, version int) ([]byte, error) {
 	}
 	var result []byte
 	dataCode = dataCode[lpos:hpos]
+	size = hpos - lpos + 1
 	for i := 0; i < length*8 && i < size; {
 		ipos := i + 8
 		if ipos > size-1 {
