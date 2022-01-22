@@ -1,6 +1,10 @@
 module github.com/tuotoo/qrcode
 
+go 1.17
+
 require (
-	github.com/google/uuid v1.1.0
-	github.com/maruel/rs v0.0.0-20150922171536-2c81c4312fe4
+	github.com/google/uuid v1.3.0
+	github.com/maruel/rs v1.1.0
 )
+
+require rsc.io/qr v0.2.0 // indirect
