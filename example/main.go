@@ -12,12 +12,11 @@ var logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 
 func main() {
 	startAt := time.Now()
-	fi, err := os.Open("qrcode11.png")
+	fi, err := os.Open("qrcode15.jpeg")
 	if !check(err) {
 		return
 	}
 	defer fi.Close()
-	qrcode.SetDebug(false)
 	qrMatrix, err := qrcode.Decode(fi)
 	if !check(err) {
 		return
