@@ -564,9 +564,6 @@ func Bits2Bytes(dataCode []bool, version int) ([]byte, error) {
 	return modeCharDecoder.Decode(dataCode[4:])
 }
 
-
-
-
 func StringBool(dataCode []bool) string {
 	return StringByte(Bool2Byte(dataCode))
 }
@@ -837,6 +834,11 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	if err != nil {
 		return nil, err
 	}
+	return DecodeFromImg(img)
+}
+
+// DecodeFromImg 直接从图像类型进行识别
+func DecodeFromImg(img image.Image) (*Matrix, error) {
 	batchID := uuid.New().String()
 	batchPath := filepath.Join(os.TempDir(), "tuotoo", "qrcode", batchID)
 	qrMatrix, err := DecodeImg(img, batchPath)
