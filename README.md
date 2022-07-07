@@ -2,6 +2,8 @@
 
 This Project is Developing.
 
+* [lktoken] 相对原项目增加了`DecodeFromImg(img Image)`接口，方便截图中使用
+
 # Plan
 
 1. 动态二值化:
@@ -24,6 +26,20 @@ This Project is Developing.
     }
     defer fi.Close()
     qrmatrix, err := qrcode.Decode(fi)
+    if err != nil{
+        logger.Println(err.Error())
+        return
+    }
+    logger.Println(qrmatrix.Content)
+
+    fi, err := os.Open("qrcode.png")
+    if err != nil{
+        logger.Println(err.Error())
+        return
+    }
+    defer fi.Close()
+	img, _, _ := image.Decode(file)
+	qrmatrix, _ := qrcode.DecodeFromImg(img)
     if err != nil{
         logger.Println(err.Error())
         return
