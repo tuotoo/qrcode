@@ -1,4 +1,4 @@
-module github.com/tuotoo/qrcode
+module github.com/lktoken/qrcode
 
 go 1.17
 
