@@ -9,7 +9,7 @@ This Project is Developing.
 3. 修复标线取值 OK
 4. 容错码纠正数据 OK
 5. 数据编码方式
-<br/>Numbert
+<br/>Numeric OK
 <br/>alphanumeric OK
 <br/>8-bit byte OK
 <br/>Kanji

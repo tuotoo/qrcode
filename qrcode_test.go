@@ -26,6 +26,41 @@ func TestBinarization(t *testing.T) {
 	}
 }
 
+func bits(s string) []bool {
+	var b []bool
+	for _, c := range s {
+		b = append(b, c == '1')
+	}
+	return b
+}
+
+func TestNumericDecoder(t *testing.T) {
+	d := &NumericDecoder{countIndicator: 10}
+
+	// "123456" = 123(10 bit) + 456(10 bit)，count=6
+	data := append(bits("0000000110"), bits("0001111011")...)
+	data = append(data, bits("0111001000")...)
+	out, err := d.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != "123456" {
+		t.Errorf("expect 123456, got %q", string(out))
+	}
+
+	// "12345" = 123(10 bit) + 45(7 bit)，count=5（奇数，最后 2 位 7 bit）
+	d2 := &NumericDecoder{countIndicator: 10}
+	data2 := append(bits("0000000101"), bits("0001111011")...)
+	data2 = append(data2, bits("0101101")...)
+	out2, err := d2.Decode(data2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out2) != "12345" {
+		t.Errorf("expect 12345, got %q", string(out2))
+	}
+}
+
 func TestDecode(t *testing.T) {
 	tests := []struct {
 		in, out string
@@ -52,6 +87,7 @@ Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
 		{in: "qrcode17.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
 		{in: "qrcode18.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
 		{in: "qrcode19.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
+		{in: "qrcode20.png", out: "1234567890"},
 	}
 	for _, tt := range tests {
 		f, err := os.Open(filepath.Join("example", tt.in))

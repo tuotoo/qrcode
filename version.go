@@ -2885,6 +2885,9 @@ func GetDataEncoder(version int) (*dataEncoder, error) {
 
 func (de *dataEncoder) SetCharModeCharDecoder(mode int) error {
 	switch mode {
+	case 1:
+		de.ModeCharDecoder = &NumericDecoder{countIndicator: de.numNumericCharCountBits}
+		return nil
 	case 2:
 		de.ModeCharDecoder = &AlphanumericDecoder{countIndicator: de.numAlphanumericCharCountBits}
 		return nil
@@ -2904,6 +2907,43 @@ var AlphanumericDecoderChar = []string{
 	"+", "-", ".", "/", ":"}
 type ModeCharDecoder interface {
 	Decode(b []bool) ([]byte, error)
+}
+
+type NumericDecoder struct {
+	countIndicator int
+}
+
+func (d *NumericDecoder) Decode(data []bool) ([]byte, error) {
+	if len(data) < d.countIndicator {
+		return nil, errors.New("numeric: insufficient data")
+	}
+	count := Bit2Int(data[:d.countIndicator])
+	data = data[d.countIndicator:]
+
+	result := make([]byte, 0, count)
+	for count >= 3 {
+		if len(data) < 10 {
+			return nil, errors.New("numeric: insufficient data")
+		}
+		v := Bit2Int(data[:10])
+		data = data[10:]
+		result = append(result, byte('0'+v/100), byte('0'+(v/10)%10), byte('0'+v%10))
+		count -= 3
+	}
+	if count == 2 {
+		if len(data) < 7 {
+			return nil, errors.New("numeric: insufficient data")
+		}
+		v := Bit2Int(data[:7])
+		result = append(result, byte('0'+v/10), byte('0'+v%10))
+	} else if count == 1 {
+		if len(data) < 4 {
+			return nil, errors.New("numeric: insufficient data")
+		}
+		v := Bit2Int(data[:4])
+		result = append(result, byte('0'+v))
+	}
+	return result, nil
 }
 
 type AlphanumericDecoder struct {
