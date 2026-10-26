@@ -43,6 +43,10 @@ type Matrix struct {
 	Size      image.Rectangle
 	Data      []bool
 	Content   string
+
+	// 二值化产生的灰度图与阈值，供后续仿射采样阶段使用。
+	grayPix   []uint8
+	threshold uint8
 }
 
 func (mx *Matrix) AtOrgPoints(x, y int) bool {
@@ -491,17 +495,6 @@ func Byte2Bool(bl []byte) []bool {
 	return result
 }
 
-func LineWidth(positionDetectionPatterns [][]*PosGroup) float64 {
-	sumWidth := 0
-	for _, positionDetectionPattern := range positionDetectionPatterns {
-		for _, group := range positionDetectionPattern {
-			sumWidth += group.Max.X - group.Min.X + 1
-			sumWidth += group.Max.Y - group.Min.Y + 1
-		}
-	}
-	return float64(sumWidth) / 60
-}
-
 func IsPositionDetectionPattern(solidGroup, hollowGroup *PosGroup) bool {
 	solidMinX, solidMaxX, solidMinY, solidMaxY := solidGroup.Min.X, solidGroup.Max.X, solidGroup.Min.Y, solidGroup.Max.Y
 	minX, maxX, minY, maxY := hollowGroup.Min.X, hollowGroup.Max.X, hollowGroup.Min.Y, hollowGroup.Max.Y
@@ -618,83 +611,6 @@ func Bit2Byte(bits []bool) byte {
 	return byte(g)
 }
 
-func Line(start, end *Pos, matrix *Matrix) (line []bool) {
-	if math.Abs(float64(start.X-end.X)) > math.Abs(float64(start.Y-end.Y)) {
-		length := end.X - start.X
-		if length > 0 {
-			for i := 0; i <= length; i++ {
-				k := float64(end.Y-start.Y) / float64(length)
-				x := start.X + i
-				y := start.Y + int(k*float64(i))
-				line = append(line, matrix.AtOrgPoints(x, y))
-			}
-		} else {
-			for i := 0; i >= length; i-- {
-				k := float64(end.Y-start.Y) / float64(length)
-				x := start.X + i
-				y := start.Y + int(k*float64(i))
-				line = append(line, matrix.AtOrgPoints(x, y))
-			}
-		}
-	} else {
-		length := end.Y - start.Y
-		if length > 0 {
-			for i := 0; i <= length; i++ {
-				k := float64(end.X-start.X) / float64(length)
-				y := start.Y + i
-				x := start.X + int(k*float64(i))
-				line = append(line, matrix.AtOrgPoints(x, y))
-			}
-		} else {
-			for i := 0; i >= length; i-- {
-				k := float64(end.X-start.X) / float64(length)
-				y := start.Y + i
-				x := start.X + int(k*float64(i))
-				line = append(line, matrix.AtOrgPoints(x, y))
-			}
-		}
-	}
-	return
-}
-
-// 标线
-func (mx *Matrix) CenterList(line []bool, offset int) (li []int) {
-	subMap := map[int]int{}
-	value := line[0]
-	subLength := 0
-	for _, b := range line {
-		if b == value {
-			subLength += 1
-		} else {
-			_, ok := subMap[subLength]
-			if ok {
-				subMap[subLength] += 1
-			} else {
-				subMap[subLength] = 1
-			}
-			value = b
-			subLength = 1
-		}
-	}
-	var maxCountSubLength float64
-	var meanSubLength float64
-	for k, v := range subMap {
-		if float64(v) > maxCountSubLength {
-			maxCountSubLength = float64(v)
-			meanSubLength = float64(k)
-		}
-	}
-	value = !line[0]
-	for index, b := range line {
-		if b != value {
-			li = append(li, index+offset+int(meanSubLength/2))
-			value = b
-		}
-	}
-	return li
-	// TODO: 多角度识别
-}
-
 func ExportGroups(size image.Rectangle, hollow []*PosGroup, filename string) error {
 	result := image.NewGray(size)
 	for _, group := range hollow {
@@ -781,6 +697,8 @@ func (mx *Matrix) ReadImage(batchPath string) {
 	pic := image.NewGray(mx.OrgSize)
 	draw.Draw(pic, mx.OrgSize, mx.OrgImage, mx.OrgImage.Bounds().Min, draw.Src)
 	fz := mx.Binarization(pic)
+	mx.threshold = fz
+	mx.grayPix = pic.Pix
 	for y := 0; y < height; y++ {
 		var line []bool
 		for x := 0; x < width; x++ {
@@ -792,6 +710,148 @@ func (mx *Matrix) ReadImage(batchPath string) {
 		}
 		mx.OrgPoints = append(mx.OrgPoints, line)
 	}
+}
+
+// distance 返回两点间的欧氏距离。
+func distance(a, b Pos) float64 {
+	dx := float64(a.X - b.X)
+	dy := float64(a.Y - b.Y)
+	return math.Sqrt(dx*dx + dy*dy)
+}
+
+// clampInt 将 v 限制在 [lo, hi] 区间内。
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// estimateModuleSize 通过定位符像素面积估算单个模块的像素尺寸。
+// 一个定位符由 7x7 外圈黑环(24 个模块)与 3x3 中心黑块(9 个模块)组成，共 33 个模块，
+// 面积旋转无关，因此对任意角度的二维码均适用。
+func estimateModuleSize(pdp *PositionDetectionPatterns) float64 {
+	area := 0.0
+	for _, g := range []*PosGroup{pdp.TopLeft, pdp.Right, pdp.Bottom} {
+		area += float64(len(g.Group))
+	}
+	area /= 3
+	return math.Sqrt(area / 33)
+}
+
+// nearestValidN 将估算的模块数对齐到合法的二维码边长（17 + 4*version）。
+func nearestValidN(n int) int {
+	if n < 17 {
+		return 17
+	}
+	if n > 177 {
+		return 177
+	}
+	return 17 + 4*int(math.Round(float64(n-17)/4))
+}
+
+// sampleGray 在灰度图上做双线性插值采样，坐标越界时取最近边界像素。
+func (mx *Matrix) sampleGray(x, y float64) uint8 {
+	width := mx.OrgSize.Dx()
+	height := mx.OrgSize.Dy()
+
+	// 先夹紧到图像范围，保证后续坐标与插值系数均有效。
+	if x < 0 {
+		x = 0
+	} else if x > float64(width-1) {
+		x = float64(width - 1)
+	}
+	if y < 0 {
+		y = 0
+	} else if y > float64(height-1) {
+		y = float64(height - 1)
+	}
+
+	x0 := int(math.Floor(x))
+	y0 := int(math.Floor(y))
+	x1 := clampInt(x0+1, 0, width-1)
+	y1 := clampInt(y0+1, 0, height-1)
+	fx := x - float64(x0)
+	fy := y - float64(y0)
+
+	v00 := float64(mx.grayPix[y0*width+x0])
+	v01 := float64(mx.grayPix[y0*width+x1])
+	v10 := float64(mx.grayPix[y1*width+x0])
+	v11 := float64(mx.grayPix[y1*width+x1])
+
+	top := v00*(1-fx) + v01*fx
+	bottom := v10*(1-fx) + v11*fx
+	return uint8(top*(1-fy) + bottom*fy)
+}
+
+// candidateNs 依据定位符间距估算二维码边长，返回最可能的候选边长（按接近程度排序）。
+// 面积法估算的模块尺寸存在几个百分点的误差，可能落在相邻版本之间，
+// 因此多返回几个候选，交由 DecodeImg 逐个校验选出正确版本。
+func candidateNs(pdp *PositionDetectionPatterns) []int {
+	moduleSize := estimateModuleSize(pdp)
+	if moduleSize <= 0 {
+		return nil
+	}
+	tl := pdp.TopLeft.Center
+	dRight := distance(tl, pdp.Right.Center)
+	dBottom := distance(tl, pdp.Bottom.Center)
+	avgDist := (dRight + dBottom) / 2
+
+	nEst := avgDist/moduleSize + 7
+	base := nearestValidN(int(math.Round(nEst)))
+
+	var result []int
+	for _, delta := range []int{0, -4, 4, -8, 8} {
+		n := base + delta
+		if n >= 17 && n <= 177 {
+			result = append(result, n)
+		}
+	}
+	return result
+}
+
+// sampleGrid 依据三个定位符中心建立仿射坐标系，按标准模块网格采样生成二值矩阵。
+// 以 TopLeft 为原点、TopLeft->Right 为 X 轴、TopLeft->Bottom 为 Y 轴，
+// 从而摆脱对图像 X/Y 轴对齐的依赖，支持任意角度旋转的二维码。
+// n 为二维码边长（模块数），由 candidateNs 提供候选值。
+func (mx *Matrix) sampleGrid(pdp *PositionDetectionPatterns, n int) error {
+	tl := pdp.TopLeft.Center
+	right := pdp.Right.Center
+	bottom := pdp.Bottom.Center
+
+	// 相邻定位符中心相距 N-7 个模块，据此反推精确的模块尺寸。
+	dRight := distance(tl, right)
+	dBottom := distance(tl, bottom)
+	avgDist := (dRight + dBottom) / 2
+	moduleSize := avgDist / float64(n-7)
+	if moduleSize <= 0 {
+		return errors.New("invalid module size")
+	}
+
+	// 以定位符中心连线方向作为仿射基向量。
+	ux := float64(right.X-tl.X) / dRight
+	uy := float64(right.Y-tl.Y) / dRight
+	vx := float64(bottom.X-tl.X) / dBottom
+	vy := float64(bottom.Y-tl.Y) / dBottom
+
+	mx.Size = image.Rect(0, 0, n, n)
+	mx.Points = make([][]bool, n)
+	for row := 0; row < n; row++ {
+		line := make([]bool, n)
+		// 模块中心相对 TopLeft 中心的偏移（模块单位），TopLeft 中心位于 (3.5, 3.5)。
+		dy := float64(row) - 3.0
+		for col := 0; col < n; col++ {
+			dx := float64(col) - 3.0
+			x := float64(tl.X) + dx*moduleSize*ux + dy*moduleSize*vx
+			y := float64(tl.Y) + dx*moduleSize*uy + dy*moduleSize*vy
+			line[col] = mx.sampleGray(x, y) < mx.threshold
+		}
+		mx.Points[row] = line
+	}
+	return nil
 }
 
 func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
@@ -827,47 +887,49 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 	for i, pattern := range positionDetectionPatterns {
 		ExportGroups(matrix.OrgSize, pattern, filepath.Join(batchPath, "positionDetectionPattern"+strconv.Itoa(i)))
 	}
-	lineWidth := LineWidth(positionDetectionPatterns)
 	pdp, err := NewPositionDetectionPattern(positionDetectionPatterns)
 	if err != nil {
 		return nil, err
 	}
-	// 顶部标线
-	topStart := &Pos{X: pdp.TopLeft.Center.X + (int(3.5*lineWidth) + 1), Y: pdp.TopLeft.Center.Y + int(3*lineWidth)}
-	topEnd := &Pos{X: pdp.Right.Center.X - (int(3.5*lineWidth) + 1), Y: pdp.Right.Center.Y + int(3*lineWidth)}
-	topTimePattens := Line(topStart, topEnd, matrix)
-	topCL := matrix.CenterList(topTimePattens, topStart.X)
-	// 左侧标线
-	leftStart := &Pos{X: pdp.TopLeft.Center.X + int(3*lineWidth), Y: pdp.TopLeft.Center.Y + (int(3.5*lineWidth) + 1)}
-	leftEnd := &Pos{X: pdp.Bottom.Center.X + int(3*lineWidth), Y: pdp.Bottom.Center.Y - (int(3.5*lineWidth) + 1)}
-	leftTimePattens := Line(leftStart, leftEnd, matrix)
-	leftCL := matrix.CenterList(leftTimePattens, leftStart.Y)
-	var qrTopCL []int
-	for i := -3; i <= 3; i++ {
-		qrTopCL = append(qrTopCL, pdp.TopLeft.Center.X+int(float64(i)*lineWidth))
-	}
-	qrTopCL = append(qrTopCL, topCL...)
-	for i := -3; i <= 3; i++ {
-		qrTopCL = append(qrTopCL, pdp.Right.Center.X+int(float64(i)*lineWidth))
-	}
-
-	var qrLeftCL []int
-	for i := -3; i <= 3; i++ {
-		qrLeftCL = append(qrLeftCL, pdp.TopLeft.Center.Y+int(float64(i)*lineWidth))
-	}
-	qrLeftCL = append(qrLeftCL, leftCL...)
-	for i := -3; i <= 3; i++ {
-		qrLeftCL = append(qrLeftCL, pdp.Bottom.Center.Y+int(float64(i)*lineWidth))
-	}
-	for _, y := range qrLeftCL {
-		var line []bool
-		for _, x := range qrTopCL {
-			line = append(line, matrix.AtOrgPoints(x, y))
+	// 逐个候选边长采样，并以完整解码（含 RS 纠错）校验选出正确版本。
+	for _, n := range candidateNs(pdp) {
+		if err := matrix.sampleGrid(pdp, n); err != nil {
+			continue
 		}
-		matrix.Points = append(matrix.Points, line)
+		if err := decodeMatrix(matrix); err == nil {
+			return matrix, nil
+		}
 	}
-	matrix.Size = image.Rect(0, 0, len(matrix.Points), len(matrix.Points))
-	return matrix, nil
+	return nil, errors.New("unable to decode QR code")
+}
+
+// decodeMatrix 对已采样的矩阵执行格式信息解析、去掩码、数据提取、RS 纠错与内容解码，
+// 成功后把内容写入 mx.Content。
+func decodeMatrix(mx *Matrix) error {
+	info, err := mx.FormatInfo()
+	if err != nil {
+		return err
+	}
+	maskFunc := MaskFunc(info.Mask)
+	unmaskMatrix := new(Matrix)
+	for y, line := range mx.Points {
+		var l []bool
+		for x, value := range line {
+			l = append(l, maskFunc(x, y) != value)
+		}
+		unmaskMatrix.Points = append(unmaskMatrix.Points, l)
+	}
+	dataArea := unmaskMatrix.DataArea()
+	dataCode, err := ParseBlock(mx, GetData(unmaskMatrix, dataArea))
+	if err != nil {
+		return err
+	}
+	bt, err := Bits2Bytes(dataCode, unmaskMatrix.Version())
+	if err != nil {
+		return err
+	}
+	mx.Content = string(bt)
+	return nil
 }
 
 // Decode 二维码识别函数
@@ -878,34 +940,7 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	}
 	batchID := uuid.New().String()
 	batchPath := filepath.Join(os.TempDir(), "tuotoo", "qrcode", batchID)
-	qrMatrix, err := DecodeImg(img, batchPath)
-	if err != nil {
-		return nil, err
-	}
-	info, err := qrMatrix.FormatInfo()
-	if err != nil {
-		return nil, err
-	}
-	maskFunc := MaskFunc(info.Mask)
-	unmaskMatrix := new(Matrix)
-	for y, line := range qrMatrix.Points {
-		var l []bool
-		for x, value := range line {
-			l = append(l, maskFunc(x, y) != value)
-		}
-		unmaskMatrix.Points = append(unmaskMatrix.Points, l)
-	}
-	dataArea := unmaskMatrix.DataArea()
-	dataCode, err := ParseBlock(qrMatrix, GetData(unmaskMatrix, dataArea))
-	if err != nil {
-		return nil, err
-	}
-	bt, err := Bits2Bytes(dataCode, unmaskMatrix.Version())
-	if err != nil {
-		return nil, err
-	}
-	qrMatrix.Content = string(bt)
-	return qrMatrix, nil
+	return DecodeImg(img, batchPath)
 }
 
 func QRReconstruct(data, ecc []byte) ([]byte, error) {
