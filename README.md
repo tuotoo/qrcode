@@ -4,7 +4,7 @@ This Project is Developing.
 
 # Plan
 
-1. 动态二值化:
+1. 动态二值化: OK
 2. 提升图片扫描的速度 OK
 3. 修复标线取值 OK
 4. 容错码纠正数据 OK

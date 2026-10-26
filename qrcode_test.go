@@ -1,11 +1,30 @@
 package qrcode
 
 import (
+	"image"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestBinarization(t *testing.T) {
+	gray := image.NewGray(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			if x < 50 {
+				gray.Pix[y*100+x] = 20
+			} else {
+				gray.Pix[y*100+x] = 220
+			}
+		}
+	}
+	mx := &Matrix{}
+	threshold := mx.Binarization(gray)
+	if threshold <= 20 || threshold >= 220 {
+		t.Errorf("大津法阈值 %d 应位于两级灰度 20 与 220 之间", threshold)
+	}
+}
 
 func TestDecode(t *testing.T) {
 	tests := []struct {

@@ -710,8 +710,47 @@ func ExportGroups(size image.Rectangle, hollow []*PosGroup, filename string) err
 	return png.Encode(outImg, result)
 }
 
-func (mx *Matrix) Binarization() uint8 {
-	return 128
+// Binarization 使用大津法（Otsu）自动计算全局阈值，避免固定阈值对光照变化敏感。
+func (mx *Matrix) Binarization(pic *image.Gray) uint8 {
+	var histogram [256]int
+	for _, v := range pic.Pix {
+		histogram[v]++
+	}
+	return otsuThreshold(histogram[:], len(pic.Pix))
+}
+
+// otsuThreshold 通过最大化类间方差选取阈值，使黑白两类像素的分离度最高。
+func otsuThreshold(histogram []int, total int) uint8 {
+	sum := 0
+	for i, count := range histogram {
+		sum += i * count
+	}
+
+	var (
+		sumB      int
+		wB        int
+		maximum   float64
+		threshold int
+	)
+	for i, count := range histogram {
+		wB += count
+		if wB == 0 {
+			continue
+		}
+		wF := total - wB
+		if wF == 0 {
+			break
+		}
+		sumB += i * count
+		mB := float64(sumB) / float64(wB)
+		mF := float64(sum-sumB) / float64(wF)
+		between := float64(wB) * float64(wF) * (mB - mF) * (mB - mF)
+		if between >= maximum {
+			threshold = i
+			maximum = between
+		}
+	}
+	return uint8(threshold)
 }
 
 func (mx *Matrix) SplitGroups() [][]Pos {
@@ -741,7 +780,7 @@ func (mx *Matrix) ReadImage(batchPath string) {
 	height := mx.OrgSize.Dy()
 	pic := image.NewGray(mx.OrgSize)
 	draw.Draw(pic, mx.OrgSize, mx.OrgImage, mx.OrgImage.Bounds().Min, draw.Src)
-	fz := mx.Binarization()
+	fz := mx.Binarization(pic)
 	for y := 0; y < height; y++ {
 		var line []bool
 		for x := 0; x < width; x++ {
