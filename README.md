@@ -12,7 +12,7 @@ This Project is Developing.
 <br/>Numeric OK
 <br/>alphanumeric OK
 <br/>8-bit byte OK
-<br/>Kanji
+<br/>Kanji OK
 6. 旋转支持  OK
 7. 透视支持 OK  
 

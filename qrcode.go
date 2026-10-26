@@ -561,9 +561,6 @@ func Bits2Bytes(dataCode []bool, version int) ([]byte, error) {
 	return modeCharDecoder.Decode(dataCode[4:])
 }
 
-
-
-
 func StringBool(dataCode []bool) string {
 	return StringByte(Bool2Byte(dataCode))
 }

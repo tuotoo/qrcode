@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"golang.org/x/text/encoding/japanese"
 )
 
 func TestBinarization(t *testing.T) {
@@ -61,6 +63,41 @@ func TestNumericDecoder(t *testing.T) {
 	}
 }
 
+func TestKanjiDecoder(t *testing.T) {
+	// 用 japanese 编码器把 UTF-8 汉字转成 Shift JIS，再按 QR Kanji 规则构造 13 bit。
+	sjis, err := japanese.ShiftJIS.NewEncoder().Bytes([]byte("点"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := int(sjis[0])<<8 | int(sjis[1])
+	var diff int
+	if code >= 0x8140 && code <= 0x9FFC {
+		diff = code - 0x8140
+	} else {
+		diff = code - 0xC140
+	}
+	// ISO 18004 7.4.6: 13 bit 值 = (diff 高字节)*0xC0 + diff 低字节。
+	v := (diff>>8)*0xC0 + (diff & 0xFF)
+
+	// 构造 data：count=1 (8 bit) + 13 bit 值。
+	d := &KanjiDecoder{countIndicator: 8}
+	var data []bool
+	for i := 7; i >= 0; i-- {
+		data = append(data, (1>>uint(i))&1 == 1)
+	}
+	for i := 12; i >= 0; i-- {
+		data = append(data, (v>>uint(i))&1 == 1)
+	}
+
+	out, err := d.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != "点" {
+		t.Errorf("expect 点, got %q", string(out))
+	}
+}
+
 func TestDecode(t *testing.T) {
 	tests := []struct {
 		in, out string
@@ -88,6 +125,7 @@ Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
 		{in: "qrcode18.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
 		{in: "qrcode19.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
 		{in: "qrcode20.png", out: "1234567890"},
+		{in: "qrcode21.png", out: "点"},
 	}
 	for _, tt := range tests {
 		f, err := os.Open(filepath.Join("example", tt.in))

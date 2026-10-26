@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"golang.org/x/text/encoding/japanese"
 )
 
 // Error detection/recovery capacity.
@@ -2843,6 +2845,7 @@ type dataEncoder struct {
 	numNumericCharCountBits      int
 	numAlphanumericCharCountBits int
 	numByteCharCountBits         int
+	numKanjiCharCountBits        int
 	ModeCharDecoder
 }
 
@@ -2853,6 +2856,7 @@ var dataEncoderTypeMap = map[dataEncoderType]*dataEncoder{
 		numNumericCharCountBits:      10,
 		numAlphanumericCharCountBits: 9,
 		numByteCharCountBits:         8,
+		numKanjiCharCountBits:        8,
 	},
 	dataEncoderType10To26: &dataEncoder{
 		minVersion:                   10,
@@ -2860,6 +2864,7 @@ var dataEncoderTypeMap = map[dataEncoderType]*dataEncoder{
 		numNumericCharCountBits:      12,
 		numAlphanumericCharCountBits: 11,
 		numByteCharCountBits:         16,
+		numKanjiCharCountBits:        10,
 	},
 	dataEncoderType27To40: &dataEncoder{
 		minVersion:                   27,
@@ -2867,6 +2872,7 @@ var dataEncoderTypeMap = map[dataEncoderType]*dataEncoder{
 		numNumericCharCountBits:      14,
 		numAlphanumericCharCountBits: 13,
 		numByteCharCountBits:         16,
+		numKanjiCharCountBits:        12,
 	},
 }
 
@@ -2894,17 +2900,20 @@ func (de *dataEncoder) SetCharModeCharDecoder(mode int) error {
 	case 4:
 		de.ModeCharDecoder = &EightBitDecoder{countIndicator: de.numByteCharCountBits}
 		return nil
+	case 8:
+		de.ModeCharDecoder = &KanjiDecoder{countIndicator: de.numKanjiCharCountBits}
+		return nil
 	}
 	return fmt.Errorf("mode:%v not suport", mode)
 }
-
 
 var AlphanumericDecoderChar = []string{
 	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
 	"A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
 	"K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
-	"U", "V", "W", "X", "Y", "Z", "SP", "$","%", "*",
+	"U", "V", "W", "X", "Y", "Z", "SP", "$", "%", "*",
 	"+", "-", ".", "/", ":"}
+
 type ModeCharDecoder interface {
 	Decode(b []bool) ([]byte, error)
 }
@@ -2950,7 +2959,6 @@ type AlphanumericDecoder struct {
 	countIndicator int
 }
 
-
 func (d *AlphanumericDecoder) Decode(data []bool) ([]byte, error) {
 	if len(data) < d.countIndicator {
 		return nil, errors.New("alphanumeric: insufficient data")
@@ -2990,10 +2998,10 @@ func (d *AlphanumericDecoder) Decode(data []bool) ([]byte, error) {
 	return []byte(result.String()), nil
 }
 
-
 type EightBitDecoder struct {
 	countIndicator int
 }
+
 func (d *EightBitDecoder) Decode(data []bool) ([]byte, error) {
 	if len(data) < d.countIndicator {
 		return nil, errors.New("8bit: insufficient data")
@@ -3009,3 +3017,37 @@ func (d *EightBitDecoder) Decode(data []bool) ([]byte, error) {
 	return result, nil
 }
 
+type KanjiDecoder struct {
+	countIndicator int
+}
+
+func (d *KanjiDecoder) Decode(data []bool) ([]byte, error) {
+	if len(data) < d.countIndicator {
+		return nil, errors.New("kanji: insufficient data")
+	}
+	count := Bit2Int(data[:d.countIndicator])
+	data = data[d.countIndicator:]
+
+	var sjis []byte
+	for i := 0; i < count; i++ {
+		if len(data) < 13 {
+			return nil, errors.New("kanji: insufficient data")
+		}
+		v := Bit2Int(data[:13])
+		data = data[13:]
+		// ISO 18004 7.4.6: 13 bit 值 = (diff 高字节)*0xC0 + diff 低字节。
+		diff := (v/0xC0)<<8 | (v % 0xC0)
+		var code int
+		if diff < 0x1F00 {
+			code = diff + 0x8140
+		} else {
+			code = diff + 0xC140
+		}
+		sjis = append(sjis, byte(code>>8), byte(code))
+	}
+	out, err := japanese.ShiftJIS.NewDecoder().Bytes(sjis)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
