@@ -2911,25 +2911,40 @@ type AlphanumericDecoder struct {
 }
 
 
-func (d *AlphanumericDecoder) Decode(data []bool) ([]byte, error)  {
+func (d *AlphanumericDecoder) Decode(data []bool) ([]byte, error) {
+	if len(data) < d.countIndicator {
+		return nil, errors.New("alphanumeric: insufficient data")
+	}
 	encodeLength := 11
-	dataLenght := Bit2Int(data[0:d.countIndicator])
-	hpos := dataLenght / 2 * encodeLength + (encodeLength - dataLenght % 2)
-
+	dataLenght := Bit2Int(data[:d.countIndicator])
+	hpos := dataLenght/2*encodeLength + (encodeLength - dataLenght%2)
+	if hpos > cap(data) {
+		hpos = cap(data)
+	}
 	data = data[d.countIndicator:hpos]
 	result := strings.Builder{}
-	for i := 0; i < dataLenght*encodeLength && i < len(data); i = i+ encodeLength{
+	for i := 0; i < dataLenght*encodeLength && i < len(data); i += encodeLength {
 		ipos := i + encodeLength
-		if ipos > len(data) -1 && Bit2Int(data[i:]) < 45 {
-			result.WriteString( AlphanumericDecoderChar[Bit2Int(data[i:ipos])])
-		}else {
-			first := Bit2Int(data[i:ipos]) / 45
-			result.WriteString( AlphanumericDecoderChar[first])
-			second := Bit2Int(data[i:ipos]) - first * 45
+		if ipos > cap(data) {
+			ipos = cap(data)
+		}
+		if ipos > len(data)-1 && Bit2Int(data[i:]) < 45 {
+			idx := Bit2Int(data[i:ipos])
+			if idx >= len(AlphanumericDecoderChar) {
+				break
+			}
+			result.WriteString(AlphanumericDecoderChar[idx])
+		} else {
+			v := Bit2Int(data[i:ipos])
+			first := v / 45
+			if first >= len(AlphanumericDecoderChar) {
+				break
+			}
+			result.WriteString(AlphanumericDecoderChar[first])
+			second := v - first*45
 			if second < 45 {
 				result.WriteString(AlphanumericDecoderChar[second])
 			}
-
 		}
 	}
 	return []byte(result.String()), nil
@@ -2939,18 +2954,17 @@ func (d *AlphanumericDecoder) Decode(data []bool) ([]byte, error)  {
 type EightBitDecoder struct {
 	countIndicator int
 }
-func (d *EightBitDecoder) Decode(data []bool) ([]byte, error)  {
-	dataLenght := Bit2Int(data[0:d.countIndicator])
-	hpos := dataLenght*8 + d.countIndicator
-	size := len(data)
-	if hpos > size-1 {
-		hpos = size - 1
+func (d *EightBitDecoder) Decode(data []bool) ([]byte, error) {
+	if len(data) < d.countIndicator {
+		return nil, errors.New("8bit: insufficient data")
 	}
-	var result []byte
-	data = data[d.countIndicator:hpos]
+	count := Bit2Int(data[:d.countIndicator])
+	data = data[d.countIndicator:]
 
-	for i := 0; i < dataLenght*8 && i < size; i = i + 8{
-		result = append(result, Bit2Byte(data[i:i+8]))
+	result := make([]byte, 0, count)
+	for i := 0; i < count && len(data) >= 8; i++ {
+		result = append(result, Bit2Byte(data[:8]))
+		data = data[8:]
 	}
 	return result, nil
 }

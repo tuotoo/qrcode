@@ -9,9 +9,7 @@ import (
 	_ "image/png"
 	"io"
 	"math"
-	"reflect"
 	"sort"
-	"time"
 
 	"github.com/maruel/rs"
 )
@@ -427,6 +425,9 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, error) {
 		for _, block := range qrCodeVersion.Block {
 			for i := 0; i < block.NumBlocks; i++ {
 				if len(dataBlocks[no]) < block.NumDataCodewords*8 {
+					if len(data) < 8 {
+						return nil, errors.New("not enough data codewords")
+					}
 					dataBlocks[no] = append(dataBlocks[no], data[0:8]...)
 					data = data[8:]
 				}
@@ -450,6 +451,9 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, error) {
 		for _, block := range qrCodeVersion.Block {
 			for i := 0; i < block.NumBlocks; i++ {
 				if len(errorBlocks[no]) < (block.NumCodewords-block.NumDataCodewords)*8 {
+					if len(data) < 8 {
+						return nil, errors.New("not enough error codewords")
+					}
 					errorBlocks[no] = append(errorBlocks[no], data[:8]...)
 					if len(data) > 8 {
 						data = data[8:]
@@ -465,11 +469,12 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, error) {
 
 	var result []byte
 	for i := range dataBlocks {
-		blockByte, err := QRReconstruct(Bool2Byte(dataBlocks[i]), Bool2Byte(errorBlocks[i]))
+		dataByte := Bool2Byte(dataBlocks[i])
+		blockByte, err := QRReconstruct(dataByte, Bool2Byte(errorBlocks[i]))
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, blockByte[:len(Bool2Byte(dataBlocks[i]))]...)
+		result = append(result, blockByte[:len(dataByte)]...)
 	}
 	return Byte2Bool(result), nil
 }
@@ -538,6 +543,9 @@ func GetData(unmaskMatrix, dataArea *Matrix) []bool {
 
 func Bits2Bytes(dataCode []bool, version int) ([]byte, error) {
 	//前4bit为编码格式， 后四位为真正的数据
+	if len(dataCode) < 4 {
+		return nil, errors.New("data too short")
+	}
 	mode := Bit2Int(dataCode[0:4])
 	encoder, err := GetDataEncoder(version)
 	if err != nil {
@@ -578,10 +586,9 @@ func StringByte(b []byte) string {
 }
 
 func Bool2Byte(dataCode []bool) []byte {
-	var result []byte
-	for i := 0; i < len(dataCode); {
+	result := make([]byte, 0, len(dataCode)/8)
+	for i := 0; i+8 <= len(dataCode); i += 8 {
 		result = append(result, Bit2Byte(dataCode[i:i+8]))
-		i += 8
 	}
 	return result
 }
@@ -651,7 +658,11 @@ func otsuThreshold(histogram []int, total int) uint8 {
 }
 
 func (mx *Matrix) SplitGroups() [][]Pos {
-	m := Copy(mx.OrgPoints).([][]bool)
+	m := make([][]bool, len(mx.OrgPoints))
+	for i, row := range mx.OrgPoints {
+		m[i] = make([]bool, len(row))
+		copy(m[i], row)
+	}
 	var groups [][]Pos
 	for y, line := range m {
 		for x, v := range line {
@@ -1100,99 +1111,4 @@ func QRReconstruct(data, ecc []byte) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
-}
-
-// Copy creates a deep copy of whatever is passed to it and returns the copy
-// in an interface{}.  The returned value will need to be asserted to the
-// correct type.
-func Copy(src interface{}) interface{} {
-	if src == nil {
-		return nil
-	}
-
-	// Make the interface a reflect.Value
-	original := reflect.ValueOf(src)
-
-	// Make a copy of the same type as the original.
-	cpy := reflect.New(original.Type()).Elem()
-
-	// Recursively copy the original.
-	copyRecursive(original, cpy)
-
-	// Return the copy as an interface.
-	return cpy.Interface()
-}
-
-// copyRecursive does the actual copying of the interface. It currently has
-// limited support for what it can handle. Add as needed.
-func copyRecursive(original, cpy reflect.Value) {
-	// handle according to original's Kind
-	switch original.Kind() {
-	case reflect.Ptr:
-		// Get the actual value being pointed to.
-		originalValue := original.Elem()
-
-		// if  it isn't valid, return.
-		if !originalValue.IsValid() {
-			return
-		}
-		cpy.Set(reflect.New(originalValue.Type()))
-		copyRecursive(originalValue, cpy.Elem())
-
-	case reflect.Interface:
-		// If this is a nil, don't do anything
-		if original.IsNil() {
-			return
-		}
-		// Get the value for the interface, not the pointer.
-		originalValue := original.Elem()
-
-		// Get the value by calling Elem().
-		copyValue := reflect.New(originalValue.Type()).Elem()
-		copyRecursive(originalValue, copyValue)
-		cpy.Set(copyValue)
-
-	case reflect.Struct:
-		t, ok := original.Interface().(time.Time)
-		if ok {
-			cpy.Set(reflect.ValueOf(t))
-			return
-		}
-		// Go through each field of the struct and copy it.
-		for i := 0; i < original.NumField(); i++ {
-			// The Type's StructField for a given field is checked to see if StructField.PkgPath
-			// is set to determine if the field is exported or not because CanSet() returns false
-			// for settable fields.  I'm not sure why.
-			if original.Type().Field(i).PkgPath != "" {
-				continue
-			}
-			copyRecursive(original.Field(i), cpy.Field(i))
-		}
-
-	case reflect.Slice:
-		if original.IsNil() {
-			return
-		}
-		// Make a new slice and copy each element.
-		cpy.Set(reflect.MakeSlice(original.Type(), original.Len(), original.Cap()))
-		for i := 0; i < original.Len(); i++ {
-			copyRecursive(original.Index(i), cpy.Index(i))
-		}
-
-	case reflect.Map:
-		if original.IsNil() {
-			return
-		}
-		cpy.Set(reflect.MakeMap(original.Type()))
-		for _, key := range original.MapKeys() {
-			originalValue := original.MapIndex(key)
-			copyValue := reflect.New(originalValue.Type()).Elem()
-			copyRecursive(originalValue, copyValue)
-			copyKey := Copy(key.Interface())
-			cpy.SetMapIndex(reflect.ValueOf(copyKey), copyValue)
-		}
-
-	default:
-		cpy.Set(original)
-	}
 }
