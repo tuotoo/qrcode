@@ -4,19 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/color"
 	"image/draw"
 	_ "image/jpeg"
-	"image/png"
+	_ "image/png"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"reflect"
-	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/maruel/rs"
 )
 
@@ -611,21 +606,6 @@ func Bit2Byte(bits []bool) byte {
 	return byte(g)
 }
 
-func ExportGroups(size image.Rectangle, hollow []*PosGroup, filename string) error {
-	result := image.NewGray(size)
-	for _, group := range hollow {
-		for _, pos := range group.Group {
-			result.Set(pos.X, pos.Y, color.White)
-		}
-	}
-	outImg, err := os.Create(filename + ".png")
-	if err != nil {
-		return err
-	}
-	defer outImg.Close()
-	return png.Encode(outImg, result)
-}
-
 // Binarization 使用大津法（Otsu）自动计算全局阈值，避免固定阈值对光照变化敏感。
 func (mx *Matrix) Binarization(pic *image.Gray) uint8 {
 	var histogram [256]int
@@ -690,7 +670,7 @@ func (mx *Matrix) SplitGroups() [][]Pos {
 	return groups
 }
 
-func (mx *Matrix) ReadImage(batchPath string) {
+func (mx *Matrix) ReadImage() {
 	mx.OrgSize = mx.OrgImage.Bounds()
 	width := mx.OrgSize.Dx()
 	height := mx.OrgSize.Dy()
@@ -854,11 +834,11 @@ func (mx *Matrix) sampleGrid(pdp *PositionDetectionPatterns, n int) error {
 	return nil
 }
 
-func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
+func DecodeImg(img image.Image) (*Matrix, error) {
 	matrix := new(Matrix)
 	matrix.OrgImage = img
 
-	matrix.ReadImage(batchPath)
+	matrix.ReadImage()
 
 	groups := matrix.SplitGroups()
 	// 判断空心
@@ -883,9 +863,6 @@ func DecodeImg(img image.Image, batchPath string) (*Matrix, error) {
 				positionDetectionPatterns = append(positionDetectionPatterns, []*PosGroup{solidGroup, hollowGroup})
 			}
 		}
-	}
-	for i, pattern := range positionDetectionPatterns {
-		ExportGroups(matrix.OrgSize, pattern, filepath.Join(batchPath, "positionDetectionPattern"+strconv.Itoa(i)))
 	}
 	pdp, err := NewPositionDetectionPattern(positionDetectionPatterns)
 	if err != nil {
@@ -938,9 +915,7 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	if err != nil {
 		return nil, err
 	}
-	batchID := uuid.New().String()
-	batchPath := filepath.Join(os.TempDir(), "tuotoo", "qrcode", batchID)
-	return DecodeImg(img, batchPath)
+	return DecodeImg(img)
 }
 
 func QRReconstruct(data, ecc []byte) ([]byte, error) {
