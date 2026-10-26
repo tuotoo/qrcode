@@ -49,20 +49,23 @@ Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
 		{in: "qrcode14.jpeg", out: "AEL-10007-78402-01XXB45EBF1163C414B24AFD062B008024605AA3AB554463147C78A4B0ECA23B1DA80"},
 		{in: "qrcode15.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
 		{in: "qrcode16.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
+		{in: "qrcode17.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
+		{in: "qrcode18.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
+		{in: "qrcode19.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF0"},
 	}
 	for _, tt := range tests {
 		f, err := os.Open(filepath.Join("example", tt.in))
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal(tt.in, err)
 		}
 		startAt := time.Now()
 		qr, err := Decode(f)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal(tt.in, err)
 		}
 		if qr.Content != tt.out {
 			t.Errorf("expect: %s, got: %s", tt.out, qr.Content)
 		}
-		t.Log(time.Since(startAt))
+		t.Log(tt.in, time.Since(startAt))
 	}
 }

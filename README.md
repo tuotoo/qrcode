@@ -13,7 +13,8 @@ This Project is Developing.
 <br/>alphanumeric OK
 <br/>8-bit byte OK
 <br/>Kanji
-6. 识别各角度倾斜的二维码
+6. 旋转支持  OK
+7. 透视支持  
 
 # Example
 

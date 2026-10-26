@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/maruel/rs"
@@ -738,13 +739,13 @@ func (mx *Matrix) sampleGray(x, y float64) uint8 {
 	width := mx.OrgSize.Dx()
 	height := mx.OrgSize.Dy()
 
-	// 先夹紧到图像范围，保证后续坐标与插值系数均有效。
-	if x < 0 {
+	// 先夹紧到图像范围，并处理 NaN/Inf，保证后续坐标与插值系数均有效。
+	if x < 0 || math.IsNaN(x) || math.IsInf(x, 0) {
 		x = 0
 	} else if x > float64(width-1) {
 		x = float64(width - 1)
 	}
-	if y < 0 {
+	if y < 0 || math.IsNaN(y) || math.IsInf(y, 0) {
 		y = 0
 	} else if y > float64(height-1) {
 		y = float64(height - 1)
@@ -765,6 +766,115 @@ func (mx *Matrix) sampleGray(x, y float64) uint8 {
 	top := v00*(1-fx) + v01*fx
 	bottom := v10*(1-fx) + v11*fx
 	return uint8(top*(1-fy) + bottom*fy)
+}
+
+// fPoint 表示浮点坐标点。
+type fPoint struct {
+	X, Y float64
+}
+
+// solveLinear 用高斯-约当消元解 8 元线性方程组（增广矩阵 8x9）。
+func solveLinear(a [8][9]float64) ([8]float64, error) {
+	for col := 0; col < 8; col++ {
+		pivot := col
+		for row := col + 1; row < 8; row++ {
+			if math.Abs(a[row][col]) > math.Abs(a[pivot][col]) {
+				pivot = row
+			}
+		}
+		if math.Abs(a[pivot][col]) < 1e-12 {
+			return [8]float64{}, errors.New("singular matrix")
+		}
+		a[col], a[pivot] = a[pivot], a[col]
+		div := a[col][col]
+		for j := col; j <= 8; j++ {
+			a[col][j] /= div
+		}
+		for row := 0; row < 8; row++ {
+			if row == col {
+				continue
+			}
+			factor := a[row][col]
+			for j := col; j <= 8; j++ {
+				a[row][j] -= factor * a[col][j]
+			}
+		}
+	}
+	var m [8]float64
+	for i := 0; i < 8; i++ {
+		m[i] = a[i][8]
+	}
+	return m, nil
+}
+
+// computeHomography 用 4 组对应点解单应矩阵（src → dst）。
+// 返回 8 个矩阵元素 [m11 m12 m13 m21 m22 m23 m31 m32]，m33 固定为 1。
+func computeHomography(src, dst [4]fPoint) ([8]float64, error) {
+	var a [8][9]float64
+	for i := 0; i < 4; i++ {
+		u, v := src[i].X, src[i].Y
+		x, y := dst[i].X, dst[i].Y
+		a[2*i] = [9]float64{u, v, 1, 0, 0, 0, -x * u, -x * v, x}
+		a[2*i+1] = [9]float64{0, 0, 0, u, v, 1, -y * u, -y * v, y}
+	}
+	return solveLinear(a)
+}
+
+// findAlignmentPatterns 在候选边长 n 下返回右下角对齐图案中心的候选位置（按接近程度排序）。
+// 模块尺寸用定位符中心距反推，比面积法在透视下更准确。
+func (mx *Matrix) findAlignmentPatterns(pdp *PositionDetectionPatterns, solid []*PosGroup, n int) []Pos {
+	if n < 25 {
+		return nil // version 1 无对齐图案
+	}
+	tl := pdp.TopLeft.Center
+	right := pdp.Right.Center
+	bottom := pdp.Bottom.Center
+	dRight := distance(tl, right)
+	dBottom := distance(tl, bottom)
+	ms := (dRight + dBottom) / 2 / float64(n-7)
+	if ms <= 0 {
+		return nil
+	}
+
+	ux := float64(right.X-tl.X) / dRight
+	uy := float64(right.Y-tl.Y) / dRight
+	vx := float64(bottom.X-tl.X) / dBottom
+	vy := float64(bottom.Y-tl.Y) / dBottom
+
+	// 对齐图案中心标准坐标为 (N-6.5, N-6.5)，相对 TopLeft 中心 (3.5,3.5) 偏移 (N-10, N-10)。
+	off := float64(n - 10)
+	expectX := float64(tl.X) + off*ms*ux + off*ms*vx
+	expectY := float64(tl.Y) + off*ms*uy + off*ms*vy
+
+	var result []Pos
+	for _, s := range solid {
+		area := float64(len(s.Group))
+		// 对齐图案中心黑点约 1 个模块，透视下面积变化较大，放宽范围。
+		if area < 0.1*ms*ms || area > 8*ms*ms {
+			continue
+		}
+		c := s.Center
+		dx := float64(c.X) - expectX
+		dy := float64(c.Y) - expectY
+		d := dx*dx + dy*dy
+		// 放宽搜索范围（透视下预估位置可能有较大偏差）。
+		if d > (20*ms)*(20*ms) {
+			continue
+		}
+		result = append(result, c)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		di := dist2(result[i], expectX, expectY)
+		dj := dist2(result[j], expectX, expectY)
+		return di < dj
+	})
+	return result
+}
+
+func dist2(p Pos, x, y float64) float64 {
+	dx := float64(p.X) - x
+	dy := float64(p.Y) - y
+	return dx*dx + dy*dy
 }
 
 // candidateNs 依据定位符间距估算二维码边长，返回最可能的候选边长（按接近程度排序）。
@@ -793,11 +903,17 @@ func candidateNs(pdp *PositionDetectionPatterns) []int {
 	return result
 }
 
-// sampleGrid 依据三个定位符中心建立仿射坐标系，按标准模块网格采样生成二值矩阵。
-// 以 TopLeft 为原点、TopLeft->Right 为 X 轴、TopLeft->Bottom 为 Y 轴，
-// 从而摆脱对图像 X/Y 轴对齐的依赖，支持任意角度旋转的二维码。
-// n 为二维码边长（模块数），由 candidateNs 提供候选值。
-func (mx *Matrix) sampleGrid(pdp *PositionDetectionPatterns, n int) error {
+// sampleGrid 按候选边长采样。检测到对齐图案时使用四点单应矩阵做透视校正，
+// 否则（version 1 无对齐图案）回退到三点仿射采样。
+func (mx *Matrix) sampleGrid(pdp *PositionDetectionPatterns, n int, align *Pos) error {
+	if align != nil {
+		return mx.samplePerspective(pdp, n, *align)
+	}
+	return mx.sampleAffine(pdp, n)
+}
+
+// sampleAffine 用三个定位符中心建立仿射坐标系采样，适用于无对齐图案的 version 1。
+func (mx *Matrix) sampleAffine(pdp *PositionDetectionPatterns, n int) error {
 	tl := pdp.TopLeft.Center
 	right := pdp.Right.Center
 	bottom := pdp.Bottom.Center
@@ -834,6 +950,47 @@ func (mx *Matrix) sampleGrid(pdp *PositionDetectionPatterns, n int) error {
 	return nil
 }
 
+// samplePerspective 用三个定位符 + 右下角对齐图案解单应矩阵做透视采样。
+func (mx *Matrix) samplePerspective(pdp *PositionDetectionPatterns, n int, align Pos) error {
+	tl := pdp.TopLeft.Center
+	right := pdp.Right.Center
+	bottom := pdp.Bottom.Center
+
+	// 标准网格坐标（src）到图像像素坐标（dst）的四组对应点。
+	src := [4]fPoint{
+		{3.5, 3.5},
+		{float64(n) - 3.5, 3.5},
+		{3.5, float64(n) - 3.5},
+		{float64(n) - 6.5, float64(n) - 6.5},
+	}
+	dst := [4]fPoint{
+		{float64(tl.X), float64(tl.Y)},
+		{float64(right.X), float64(right.Y)},
+		{float64(bottom.X), float64(bottom.Y)},
+		{float64(align.X), float64(align.Y)},
+	}
+	h, err := computeHomography(src, dst)
+	if err != nil {
+		return err
+	}
+
+	mx.Size = image.Rect(0, 0, n, n)
+	mx.Points = make([][]bool, n)
+	for row := 0; row < n; row++ {
+		line := make([]bool, n)
+		v := float64(row) + 0.5
+		for col := 0; col < n; col++ {
+			u := float64(col) + 0.5
+			w := h[6]*u + h[7]*v + 1
+			x := (h[0]*u + h[1]*v + h[2]) / w
+			y := (h[3]*u + h[4]*v + h[5]) / w
+			line[col] = mx.sampleGray(x, y) < mx.threshold
+		}
+		mx.Points[row] = line
+	}
+	return nil
+}
+
 func DecodeImg(img image.Image) (*Matrix, error) {
 	matrix := new(Matrix)
 	matrix.OrgImage = img
@@ -860,6 +1017,12 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 	for _, solidGroup := range solid {
 		for _, hollowGroup := range hollow {
 			if IsPositionDetectionPattern(solidGroup, hollowGroup) {
+				// 定位符的实心块(3x3)与外环(7x7)面积比约为 9/24=0.375，
+				// 过滤掉因数据粘连导致面积比异常的误检（如粘连的外环）。
+				ratio := float64(len(solidGroup.Group)) / float64(len(hollowGroup.Group))
+				if ratio < 0.25 || ratio > 0.5 {
+					continue
+				}
 				positionDetectionPatterns = append(positionDetectionPatterns, []*PosGroup{solidGroup, hollowGroup})
 			}
 		}
@@ -870,11 +1033,24 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 	}
 	// 逐个候选边长采样，并以完整解码（含 RS 纠错）校验选出正确版本。
 	for _, n := range candidateNs(pdp) {
-		if err := matrix.sampleGrid(pdp, n); err != nil {
+		aligns := matrix.findAlignmentPatterns(pdp, solid, n)
+		if len(aligns) == 0 {
+			// version 1 无对齐图案，回退三点仿射。
+			if err := matrix.sampleGrid(pdp, n, nil); err != nil {
+				continue
+			}
+			if err := decodeMatrix(matrix); err == nil {
+				return matrix, nil
+			}
 			continue
 		}
-		if err := decodeMatrix(matrix); err == nil {
-			return matrix, nil
+		for i := range aligns {
+			if err := matrix.sampleGrid(pdp, n, &aligns[i]); err != nil {
+				continue
+			}
+			if err := decodeMatrix(matrix); err == nil {
+				return matrix, nil
+			}
 		}
 	}
 	return nil, errors.New("unable to decode QR code")
