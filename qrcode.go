@@ -1,8 +1,8 @@
+// Package qrcode implements a QR code decoder.
 package qrcode
 
 import (
 	"errors"
-	"fmt"
 	"image"
 	"image/draw"
 	_ "image/jpeg"
@@ -14,12 +14,16 @@ import (
 	"github.com/maruel/rs"
 )
 
+// PositionDetectionPatterns holds the three finder patterns of a QR code:
+// top-left, top-right, and bottom-left.
 type PositionDetectionPatterns struct {
 	TopLeft *PosGroup
 	Right   *PosGroup
 	Bottom  *PosGroup
 }
 
+// PosGroup is a connected group of pixels (a connected component) together
+// with its geometric properties.
 type PosGroup struct {
 	Group    []Pos
 	GroupMap map[Pos]bool
@@ -29,6 +33,8 @@ type PosGroup struct {
 	Hollow   bool
 }
 
+// Matrix is the decoded QR code. It holds the original image, its binarized
+// form, the sampled module grid, and the decoded content.
 type Matrix struct {
 	OrgImage  image.Image
 	OrgSize   image.Rectangle
@@ -38,7 +44,8 @@ type Matrix struct {
 	Data      []bool
 	Content   string
 
-	// 二值化产生的灰度图与阈值，供后续仿射采样阶段使用。
+	// grayPix and threshold are the binarization results used by the
+	// perspective sampling stage.
 	grayPix   []uint8
 	threshold uint8
 }
@@ -52,6 +59,7 @@ func (mx *Matrix) AtOrgPoints(x, y int) bool {
 	return false
 }
 
+// FormatInfo holds the error correction level and mask of a QR code.
 type FormatInfo struct {
 	ErrorCorrectionLevel, Mask int
 }
@@ -115,6 +123,7 @@ func (mx *Matrix) Version() int {
 	return (width-21)/4 + 1
 }
 
+// Pos is a 2D coordinate.
 type Pos struct {
 	X int
 	Y int
@@ -206,9 +215,12 @@ func (mx *Matrix) DataArea() *Matrix {
 	return da
 }
 
+// NewPositionDetectionPattern identifies the three finder patterns from the
+// candidate solid/hollow pairs and determines their roles (top-left, top-right,
+// bottom-left).
 func NewPositionDetectionPattern(PDPs [][]*PosGroup) (*PositionDetectionPatterns, error) {
 	if len(PDPs) < 3 {
-		return nil, errors.New("lost Position Detection Pattern")
+		return nil, errors.New("lost position detection pattern")
 	}
 	var pdpGroups []*PosGroup
 	for _, pdp := range PDPs {
@@ -250,6 +262,7 @@ func NewPositionDetectionPattern(PDPs [][]*PosGroup) (*PositionDetectionPatterns
 	return positionDetectionPatterns, nil
 }
 
+// PossListToGroup merges multiple PosGroups into a single one.
 func PossListToGroup(groups []*PosGroup) *PosGroup {
 	var newGroup []Pos
 	for _, group := range groups {
@@ -258,23 +271,28 @@ func PossListToGroup(groups []*PosGroup) *PosGroup {
 	return PossToGroup(newGroup)
 }
 
+// K is an edge connecting two finder patterns, used to compute their angle.
 type K struct {
 	FirstPosGroup *PosGroup
 	LastPosGroup  *PosGroup
 	K             float64
 }
 
+// Radian computes the angle of the edge k in radians.
 func Radian(k *K) {
 	x, y := k.LastPosGroup.Center.X-k.FirstPosGroup.Center.X, k.LastPosGroup.Center.Y-k.FirstPosGroup.Center.Y
 	k.K = math.Atan2(float64(y), float64(x))
 }
 
+// IsVertical returns the angular offset between two edges and a right angle.
 func IsVertical(kf, kl *K) (offset float64) {
 	dk := kl.K - kf.K
 	offset = math.Abs(dk - math.Pi/2)
 	return
 }
 
+// PossToGroup builds a PosGroup from a slice of points, computing its center,
+// bounding box, and hollowness.
 func PossToGroup(group []Pos) *PosGroup {
 	posGroup := new(PosGroup)
 	posGroup.Group = group
@@ -290,6 +308,7 @@ func PossToGroup(group []Pos) *PosGroup {
 	return posGroup
 }
 
+// Rectangle returns the axis-aligned bounding box of a point group.
 func Rectangle(group []Pos) (minX, maxX, minY, maxY int) {
 	minX, maxX, minY, maxY = group[0].X, group[0].X, group[0].Y, group[0].Y
 	for _, pos := range group {
@@ -309,6 +328,7 @@ func Rectangle(group []Pos) (minX, maxX, minY, maxY int) {
 	return
 }
 
+// CenterPoint returns the mean coordinate of a point group.
 func CenterPoint(group []Pos) Pos {
 	sumX, sumY := 0, 0
 	for _, pos := range group {
@@ -320,6 +340,7 @@ func CenterPoint(group []Pos) Pos {
 	return Pos{X: meanX, Y: meanY}
 }
 
+// MaskFunc returns the mask function for the given QR mask pattern code.
 func MaskFunc(code int) func(x, y int) bool {
 	switch code {
 	case 0: // 000
@@ -360,6 +381,8 @@ func MaskFunc(code int) func(x, y int) bool {
 	}
 }
 
+// SplitGroup performs an 8-neighbor flood fill starting at (centerX, centerY),
+// removing visited points from poss and appending them to around.
 func SplitGroup(poss *[][]bool, centerX, centerY int, around *[]Pos) {
 	maxy := len(*poss) - 1
 	for y := -1; y < 2; y++ {
@@ -382,6 +405,7 @@ func SplitGroup(poss *[][]bool, centerX, centerY int, around *[]Pos) {
 	}
 }
 
+// Hollow reports whether a PosGroup contains holes.
 func Hollow(group *PosGroup) bool {
 	count := len(group.GroupMap)
 	for y := group.Min.Y; y <= group.Max.Y; y++ {
@@ -400,6 +424,8 @@ func Hollow(group *PosGroup) bool {
 	return count != 0
 }
 
+// ParseBlock splits the data bits into blocks, applies Reed-Solomon error
+// correction, and reassembles the corrected data bits.
 func ParseBlock(m *Matrix, data []bool) ([]bool, error) {
 	version := m.Version()
 	info, err := m.FormatInfo()
@@ -421,17 +447,17 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, error) {
 	}
 	for {
 		leftLength := len(data)
-		no := 0
+		idx := 0
 		for _, block := range qrCodeVersion.Block {
 			for i := 0; i < block.NumBlocks; i++ {
-				if len(dataBlocks[no]) < block.NumDataCodewords*8 {
+				if len(dataBlocks[idx]) < block.NumDataCodewords*8 {
 					if len(data) < 8 {
 						return nil, errors.New("not enough data codewords")
 					}
-					dataBlocks[no] = append(dataBlocks[no], data[0:8]...)
+					dataBlocks[idx] = append(dataBlocks[idx], data[0:8]...)
 					data = data[8:]
 				}
-				no += 1
+				idx++
 			}
 		}
 		if leftLength == len(data) {
@@ -447,19 +473,19 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, error) {
 	}
 	for {
 		leftLength := len(data)
-		no := 0
+		idx := 0
 		for _, block := range qrCodeVersion.Block {
 			for i := 0; i < block.NumBlocks; i++ {
-				if len(errorBlocks[no]) < (block.NumCodewords-block.NumDataCodewords)*8 {
+				if len(errorBlocks[idx]) < (block.NumCodewords-block.NumDataCodewords)*8 {
 					if len(data) < 8 {
 						return nil, errors.New("not enough error codewords")
 					}
-					errorBlocks[no] = append(errorBlocks[no], data[:8]...)
+					errorBlocks[idx] = append(errorBlocks[idx], data[:8]...)
 					if len(data) > 8 {
 						data = data[8:]
 					}
 				}
-				no += 1
+				idx++
 			}
 		}
 		if leftLength == len(data) {
@@ -479,6 +505,7 @@ func ParseBlock(m *Matrix, data []bool) ([]bool, error) {
 	return Byte2Bool(result), nil
 }
 
+// Byte2Bool converts a byte slice into a bit slice (most significant bit first).
 func Byte2Bool(bl []byte) []bool {
 	var result []bool
 	for _, b := range bl {
@@ -496,6 +523,8 @@ func Byte2Bool(bl []byte) []bool {
 	return result
 }
 
+// IsPositionDetectionPattern reports whether a solid group lies inside a hollow
+// group, forming a QR finder pattern.
 func IsPositionDetectionPattern(solidGroup, hollowGroup *PosGroup) bool {
 	solidMinX, solidMaxX, solidMinY, solidMaxY := solidGroup.Min.X, solidGroup.Max.X, solidGroup.Min.Y, solidGroup.Max.Y
 	minX, maxX, minY, maxY := hollowGroup.Min.X, hollowGroup.Max.X, hollowGroup.Min.Y, hollowGroup.Max.Y
@@ -513,6 +542,7 @@ func IsPositionDetectionPattern(solidGroup, hollowGroup *PosGroup) bool {
 	return true
 }
 
+// GetData reads the data bits from the unmasked matrix in the QR zigzag order.
 func GetData(unmaskMatrix, dataArea *Matrix) []bool {
 	width := len(unmaskMatrix.Points)
 	var data []bool
@@ -541,6 +571,7 @@ func GetData(unmaskMatrix, dataArea *Matrix) []bool {
 	return data
 }
 
+// Bits2Bytes decodes the data bits (mode + payload) into the final content.
 func Bits2Bytes(dataCode []bool, version int) ([]byte, error) {
 	//前4bit为编码格式， 后四位为真正的数据
 	if len(dataCode) < 4 {
@@ -561,27 +592,7 @@ func Bits2Bytes(dataCode []bool, version int) ([]byte, error) {
 	return modeCharDecoder.Decode(dataCode[4:])
 }
 
-func StringBool(dataCode []bool) string {
-	return StringByte(Bool2Byte(dataCode))
-}
-
-func StringByte(b []byte) string {
-	var bitString string
-	for i := 0; i < len(b)*8; i++ {
-		if (i % 8) == 0 {
-			bitString += " "
-		}
-
-		if (b[i/8] & (0x80 >> byte(i%8))) != 0 {
-			bitString += "1"
-		} else {
-			bitString += "0"
-		}
-	}
-
-	return fmt.Sprintf("numBits=%d, bits=%s", len(b)*8, bitString)
-}
-
+// Bool2Byte converts a bit slice into a byte slice, dropping any trailing bits.
 func Bool2Byte(dataCode []bool) []byte {
 	result := make([]byte, 0, len(dataCode)/8)
 	for i := 0; i+8 <= len(dataCode); i += 8 {
@@ -589,6 +600,8 @@ func Bool2Byte(dataCode []bool) []byte {
 	}
 	return result
 }
+
+// Bit2Int interprets a bit slice as a big-endian unsigned integer.
 func Bit2Int(bits []bool) int {
 	g := 0
 	for _, i := range bits {
@@ -600,6 +613,7 @@ func Bit2Int(bits []bool) int {
 	return g
 }
 
+// Bit2Byte interprets a bit slice as a byte.
 func Bit2Byte(bits []bool) byte {
 	var g uint8
 	for _, i := range bits {
@@ -685,13 +699,13 @@ func (mx *Matrix) ReadImage() {
 	height := mx.OrgSize.Dy()
 	pic := image.NewGray(mx.OrgSize)
 	draw.Draw(pic, mx.OrgSize, mx.OrgImage, mx.OrgImage.Bounds().Min, draw.Src)
-	fz := mx.Binarization(pic)
-	mx.threshold = fz
+	threshold := mx.Binarization(pic)
+	mx.threshold = threshold
 	mx.grayPix = pic.Pix
 	for y := 0; y < height; y++ {
 		var line []bool
 		for x := 0; x < width; x++ {
-			if pic.Pix[y*width+x] < fz {
+			if pic.Pix[y*width+x] < threshold {
 				line = append(line, true)
 			} else {
 				line = append(line, false)
@@ -999,6 +1013,8 @@ func (mx *Matrix) samplePerspective(pdp *PositionDetectionPatterns, n int, align
 	return nil
 }
 
+// DecodeImg decodes a QR code from an image, returning the sampled matrix with
+// its content populated.
 func DecodeImg(img image.Image) (*Matrix, error) {
 	matrix := new(Matrix)
 	matrix.OrgImage = img
@@ -1093,7 +1109,7 @@ func decodeMatrix(mx *Matrix) error {
 	return nil
 }
 
-// Decode 二维码识别函数
+// Decode decodes a QR code from an io.Reader and returns its content.
 func Decode(fi io.Reader) (*Matrix, error) {
 	img, _, err := image.Decode(fi)
 	if err != nil {
@@ -1102,6 +1118,7 @@ func Decode(fi io.Reader) (*Matrix, error) {
 	return DecodeImg(img)
 }
 
+// QRReconstruct corrects errors in data using the Reed-Solomon ecc codewords.
 func QRReconstruct(data, ecc []byte) ([]byte, error) {
 	_, err := rs.NewDecoder(rs.QRCodeField256).Decode(data, ecc)
 	if err != nil {

@@ -68,6 +68,8 @@ type Block struct {
 }
 
 var (
+	// AlignmentPatternCenter lists the module coordinates of alignment pattern
+	// centers for each QR version.
 	AlignmentPatternCenter = [][]int{
 		{}, // Version 0 doesn't exist.
 		{}, // Version 1 doesn't use alignment patterns.
@@ -111,6 +113,7 @@ var (
 		{6, 26, 54, 82, 110, 138, 166},
 		{6, 30, 58, 86, 114, 142, 170},
 	}
+	// Versions lists every QR code version at every error correction level.
 	Versions = []QRcodeVersion{
 		{
 			1,
@@ -2876,6 +2879,7 @@ var dataEncoderTypeMap = map[dataEncoderType]*dataEncoder{
 	},
 }
 
+// GetDataEncoder returns the data encoder for the given QR version.
 func GetDataEncoder(version int) (*dataEncoder, error) {
 	switch {
 	case version >= 1 && version <= 9:
@@ -2889,6 +2893,7 @@ func GetDataEncoder(version int) (*dataEncoder, error) {
 	}
 }
 
+// SetCharModeCharDecoder selects the mode decoder for the given mode indicator.
 func (de *dataEncoder) SetCharModeCharDecoder(mode int) error {
 	switch mode {
 	case 1:
@@ -2904,9 +2909,10 @@ func (de *dataEncoder) SetCharModeCharDecoder(mode int) error {
 		de.ModeCharDecoder = &KanjiDecoder{countIndicator: de.numKanjiCharCountBits}
 		return nil
 	}
-	return fmt.Errorf("mode:%v not suport", mode)
+	return fmt.Errorf("mode:%v not support", mode)
 }
 
+// AlphanumericDecoderChar is the QR alphanumeric character set, in value order.
 var AlphanumericDecoderChar = []string{
 	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
 	"A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
@@ -2918,6 +2924,7 @@ type ModeCharDecoder interface {
 	Decode(b []bool) ([]byte, error)
 }
 
+// NumericDecoder decodes QR numeric mode data.
 type NumericDecoder struct {
 	countIndicator int
 }
@@ -2955,6 +2962,7 @@ func (d *NumericDecoder) Decode(data []bool) ([]byte, error) {
 	return result, nil
 }
 
+// AlphanumericDecoder decodes QR alphanumeric mode data.
 type AlphanumericDecoder struct {
 	countIndicator int
 }
@@ -2998,6 +3006,7 @@ func (d *AlphanumericDecoder) Decode(data []bool) ([]byte, error) {
 	return []byte(result.String()), nil
 }
 
+// EightBitDecoder decodes QR 8-bit byte mode data.
 type EightBitDecoder struct {
 	countIndicator int
 }
@@ -3017,6 +3026,7 @@ func (d *EightBitDecoder) Decode(data []bool) ([]byte, error) {
 	return result, nil
 }
 
+// KanjiDecoder decodes QR Kanji mode data (Shift JIS encoded).
 type KanjiDecoder struct {
 	countIndicator int
 }
