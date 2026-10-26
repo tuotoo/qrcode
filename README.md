@@ -14,7 +14,7 @@ This Project is Developing.
 <br/>8-bit byte OK
 <br/>Kanji
 6. 旋转支持  OK
-7. 透视支持  
+7. 透视支持 OK  
 
 # Example
 
