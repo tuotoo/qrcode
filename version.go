@@ -2971,37 +2971,34 @@ func (d *AlphanumericDecoder) Decode(data []bool) ([]byte, error) {
 	if len(data) < d.countIndicator {
 		return nil, errors.New("alphanumeric: insufficient data")
 	}
-	encodeLength := 11
-	dataLenght := Bit2Int(data[:d.countIndicator])
-	hpos := dataLenght/2*encodeLength + (encodeLength - dataLenght%2)
-	if hpos > cap(data) {
-		hpos = cap(data)
+	count := Bit2Int(data[:d.countIndicator])
+	data = data[d.countIndicator:]
+
+	var result strings.Builder
+	for count >= 2 {
+		if len(data) < 11 {
+			return nil, errors.New("alphanumeric: insufficient data")
+		}
+		v := Bit2Int(data[:11])
+		data = data[11:]
+		first := v / 45
+		second := v % 45
+		if first >= len(AlphanumericDecoderChar) || second >= len(AlphanumericDecoderChar) {
+			return nil, errors.New("alphanumeric: invalid char index")
+		}
+		result.WriteString(AlphanumericDecoderChar[first])
+		result.WriteString(AlphanumericDecoderChar[second])
+		count -= 2
 	}
-	data = data[d.countIndicator:hpos]
-	result := strings.Builder{}
-	for i := 0; i < dataLenght*encodeLength && i < len(data); i += encodeLength {
-		ipos := i + encodeLength
-		if ipos > cap(data) {
-			ipos = cap(data)
+	if count == 1 {
+		if len(data) < 6 {
+			return nil, errors.New("alphanumeric: insufficient data")
 		}
-		if ipos > len(data)-1 && Bit2Int(data[i:]) < 45 {
-			idx := Bit2Int(data[i:ipos])
-			if idx >= len(AlphanumericDecoderChar) {
-				break
-			}
-			result.WriteString(AlphanumericDecoderChar[idx])
-		} else {
-			v := Bit2Int(data[i:ipos])
-			first := v / 45
-			if first >= len(AlphanumericDecoderChar) {
-				break
-			}
-			result.WriteString(AlphanumericDecoderChar[first])
-			second := v - first*45
-			if second < 45 {
-				result.WriteString(AlphanumericDecoderChar[second])
-			}
+		v := Bit2Int(data[:6])
+		if v >= len(AlphanumericDecoderChar) {
+			return nil, errors.New("alphanumeric: invalid char index")
 		}
+		result.WriteString(AlphanumericDecoderChar[v])
 	}
 	return []byte(result.String()), nil
 }
