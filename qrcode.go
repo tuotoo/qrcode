@@ -25,12 +25,11 @@ type PositionDetectionPatterns struct {
 // PosGroup is a connected group of pixels (a connected component) together
 // with its geometric properties.
 type PosGroup struct {
-	Group    []Pos
-	GroupMap map[Pos]bool
-	Min      Pos
-	Max      Pos
-	Center   Pos
-	Hollow   bool
+	Group  []Pos
+	Min    Pos
+	Max    Pos
+	Center Pos
+	Hollow bool
 }
 
 // Matrix is the decoded QR code. It holds the original image, its binarized
@@ -48,6 +47,16 @@ type Matrix struct {
 	// perspective sampling stage.
 	grayPix   []uint8
 	threshold uint8
+
+	// sampleScale maps a (possibly down-scaled) detection coordinate to the
+	// full-resolution gray image. It is 1 for full-resolution detection and k
+	// when finders were detected on an image down-scaled by k.
+	sampleScale float64
+
+	// invert flips the module polarity when sampling. It is true for inverted
+	// QR codes (light modules on a dark background), where a module is dark
+	// in the gray image when gray >= threshold instead of gray < threshold.
+	invert bool
 }
 
 func (mx *Matrix) AtOrgPoints(x, y int) bool {
@@ -297,10 +306,6 @@ func PossToGroup(group []Pos) *PosGroup {
 	posGroup := new(PosGroup)
 	posGroup.Group = group
 	posGroup.Center = CenterPoint(group)
-	posGroup.GroupMap = make(map[Pos]bool)
-	for _, pos := range group {
-		posGroup.GroupMap[pos] = true
-	}
 	minX, maxX, minY, maxY := Rectangle(group)
 	posGroup.Min = Pos{X: minX, Y: minY}
 	posGroup.Max = Pos{X: maxX, Y: maxY}
@@ -405,21 +410,56 @@ func SplitGroup(poss *[][]bool, centerX, centerY int, around *[]Pos) {
 	}
 }
 
-// Hollow reports whether a PosGroup contains holes.
+// Hollow reports whether a PosGroup contains holes or internal gaps. It compares
+// the total pixel count against the sum of per-row bounding spans: a row whose
+// black pixels are not contiguous makes its span wider than its pixel count,
+// leaving a non-zero remainder. Rows are tracked by their min/max x. For the
+// common case of a compact group we use plain arrays indexed by row offset
+// (no hashing, no allocation churn); very tall groups fall back to a map.
 func Hollow(group *PosGroup) bool {
-	count := len(group.GroupMap)
-	for y := group.Min.Y; y <= group.Max.Y; y++ {
-		min := -1
-		max := -1
-		for x := group.Min.X; x <= group.Max.X; x++ {
-			if group.GroupMap[Pos{x, y}] {
-				if min < 0 {
-					min = x
-				}
-				max = x
+	height := group.Max.Y - group.Min.Y + 1
+	count := len(group.Group)
+	if height > 0 && height <= 1<<12 {
+		minX := make([]int, height)
+		maxX := make([]int, height)
+		for i := range minX {
+			minX[i] = 1 << 30
+		}
+		base := group.Min.Y
+		for _, p := range group.Group {
+			i := p.Y - base
+			if p.X < minX[i] {
+				minX[i] = p.X
+			}
+			if p.X > maxX[i] {
+				maxX[i] = p.X
 			}
 		}
-		count = count - (max - min + 1)
+		for i := 0; i < height; i++ {
+			if maxX[i] >= 0 {
+				count -= maxX[i] - minX[i] + 1
+			}
+		}
+		return count != 0
+	}
+	// Tall, thin group (e.g. a stray line): a map avoids a huge array.
+	rows := make(map[int][2]int, 8)
+	for _, p := range group.Group {
+		b, ok := rows[p.Y]
+		if !ok {
+			rows[p.Y] = [2]int{p.X, p.X}
+		} else {
+			if p.X < b[0] {
+				b[0] = p.X
+			}
+			if p.X > b[1] {
+				b[1] = p.X
+			}
+			rows[p.Y] = b
+		}
+	}
+	for _, b := range rows {
+		count -= b[1] - b[0] + 1
 	}
 	return count != 0
 }
@@ -668,26 +708,52 @@ func otsuThreshold(histogram []int, total int) uint8 {
 	return uint8(threshold)
 }
 
+// SplitGroups splits the matrix's binary grid into connected components.
 func (mx *Matrix) SplitGroups() [][]Pos {
-	m := make([][]bool, len(mx.OrgPoints))
-	for i, row := range mx.OrgPoints {
+	return splitGroups(mx.OrgPoints)
+}
+
+// splitGroups performs an 8-neighbor flood fill on a binary grid, returning the
+// connected components as point lists. It copies the grid so the input is not
+// mutated, which lets it run on down-scaled or eroded grids.
+func splitGroups(grid [][]bool) [][]Pos {
+	m := make([][]bool, len(grid))
+	for i, row := range grid {
 		m[i] = make([]bool, len(row))
 		copy(m[i], row)
 	}
+	height := len(m)
 	var groups [][]Pos
+	// 内联 8 邻域泛洪填充：每个连通分量用独立切片做队列，避免逐像素调用
+	// SplitGroup 的函数与指针开销。
 	for y, line := range m {
 		for x, v := range line {
 			if !v {
 				continue
 			}
-			var newGroup []Pos
-			newGroup = append(newGroup, Pos{x, y})
+			group := []Pos{{x, y}}
 			m[y][x] = false
-			for i := 0; i < len(newGroup); i++ {
-				v := newGroup[i]
-				SplitGroup(&m, v.X, v.Y, &newGroup)
+			for i := 0; i < len(group); i++ {
+				cx, cy := group[i].X, group[i].Y
+				for dy := -1; dy <= 1; dy++ {
+					ny := cy + dy
+					if ny < 0 || ny >= height {
+						continue
+					}
+					row := m[ny]
+					for dx := -1; dx <= 1; dx++ {
+						nx := cx + dx
+						if nx < 0 || nx >= len(row) {
+							continue
+						}
+						if row[nx] {
+							row[nx] = false
+							group = append(group, Pos{nx, ny})
+						}
+					}
+				}
 			}
-			groups = append(groups, newGroup)
+			groups = append(groups, group)
 		}
 	}
 	return groups
@@ -754,6 +820,215 @@ func nearestValidN(n int) int {
 		return 177
 	}
 	return 17 + 4*int(math.Round(float64(n-17)/4))
+}
+
+// finderLineHit 记录一次扫描线命中：在一条水平/垂直线上发现了定位符的
+// 1:1:3:1:1 特征。center 是中间 run 的中心，dark 是中间 run 的颜色（即定位符
+// 3x3 中心块的颜色），module 是根据中间 run 长度估算的模块尺寸。
+type finderLineHit struct {
+	center Pos
+	dark   bool
+	module float64
+}
+
+// scanFinderLine 对一维 bool 序列做 run-length 编码并匹配 1:1:3:1:1。
+// fixed 是固定坐标（行扫描时是 y，列扫描时是 x）；horizontal 为 true 表示
+// center.X 随扫描变化。
+func scanFinderLine(seq []bool, fixed int, horizontal bool) []finderLineHit {
+	type run struct {
+		start, length int
+		dark          bool
+	}
+	var runs []run
+	for i := 0; i < len(seq); {
+		c := seq[i]
+		j := i
+		for j < len(seq) && seq[j] == c {
+			j++
+		}
+		runs = append(runs, run{start: i, length: j - i, dark: c})
+		i = j
+	}
+	var hits []finderLineHit
+	for k := 0; k+4 < len(runs); k++ {
+		r0, r1, r2, r3, r4 := runs[k], runs[k+1], runs[k+2], runs[k+3], runs[k+4]
+		// 颜色模式：r0==r2==r4 且 r1==r3!=r0（黑白黑白黑或白黑白黑白）。
+		if r0.dark != r2.dark || r2.dark != r4.dark {
+			continue
+		}
+		if r1.dark != r3.dark || r1.dark == r0.dark {
+			continue
+		}
+		if !finderRatio(r0.length, r1.length, r2.length, r3.length, r4.length) {
+			continue
+		}
+		mid := r2.start + r2.length/2
+		if horizontal {
+			hits = append(hits, finderLineHit{
+				center: Pos{X: mid, Y: fixed},
+				dark:   r2.dark,
+				module: float64(r2.length) / 3,
+			})
+		} else {
+			hits = append(hits, finderLineHit{
+				center: Pos{X: fixed, Y: mid},
+				dark:   r2.dark,
+				module: float64(r2.length) / 3,
+			})
+		}
+	}
+	return hits
+}
+
+// finderRatio 检查 1:1:3:1:1 比例，允许 ±50% 容差。
+func finderRatio(a, b, c, d, e int) bool {
+	if c < 3 {
+		return false
+	}
+	unit := float64(c) / 3
+	return ratioInRange(a, unit) && ratioInRange(b, unit) &&
+		ratioInRange(d, unit) && ratioInRange(e, unit)
+}
+
+func ratioInRange(v int, unit float64) bool {
+	if unit < 1 {
+		return false
+	}
+	r := float64(v) / unit
+	return r >= 0.5 && r <= 1.5
+}
+
+// detectFinderScan 用扫描线法检测定位符。它不依赖连通分量，因此对圆点式、反色、
+// 噪声二维码更鲁棒。返回 3 个定位符（几何关系已确定）、极性（invert）与模块尺寸
+// 估计。
+func detectFinderScan(grid [][]bool) (*PositionDetectionPatterns, bool, float64, error) {
+	h := len(grid)
+	w := 0
+	for _, row := range grid {
+		if len(row) > w {
+			w = len(row)
+		}
+	}
+	var rowHits, colHits []finderLineHit
+	for y := 0; y < h; y++ {
+		rowHits = append(rowHits, scanFinderLine(grid[y], y, true)...)
+	}
+	for x := 0; x < w; x++ {
+		col := make([]bool, h)
+		for y := 0; y < h; y++ {
+			if x < len(grid[y]) {
+				col[y] = grid[y][x]
+			}
+		}
+		colHits = append(colHits, scanFinderLine(col, x, false)...)
+	}
+
+	// 网格交叉验证：行命中与列命中的交集处即为定位符中心。
+	const cell = 6
+	type key struct{ cx, cy int }
+	rowCount := map[key]int{}
+	colCount := map[key]int{}
+	darkVotes := map[key]int{}
+	var modules []float64
+	for _, hit := range rowHits {
+		k := key{hit.center.X / cell, hit.center.Y / cell}
+		rowCount[k]++
+		if hit.dark {
+			darkVotes[k]++
+		}
+		modules = append(modules, hit.module)
+	}
+	for _, hit := range colHits {
+		k := key{hit.center.X / cell, hit.center.Y / cell}
+		colCount[k]++
+	}
+
+	var centers []Pos
+	var darks []bool
+	for k, rc := range rowCount {
+		if rc < 3 || colCount[k] < 3 {
+			continue
+		}
+		centers = append(centers, Pos{X: k.cx*cell + cell/2, Y: k.cy*cell + cell/2})
+		darks = append(darks, darkVotes[k] >= (rc+1)/2)
+	}
+
+	pdp, err := newPDPFromCenters(centers)
+	if err != nil {
+		return nil, false, 0, err
+	}
+	darkCnt := 0
+	for _, d := range darks {
+		if d {
+			darkCnt++
+		}
+	}
+	invert := darkCnt < len(darks)/2
+	return pdp, invert, medianFloat(modules), nil
+}
+
+// newPDPFromCenters 把候选中心包装成 PosGroup 交给 NewPositionDetectionPattern，
+// 选出构成直角三角形的 3 个定位符。
+func newPDPFromCenters(centers []Pos) (*PositionDetectionPatterns, error) {
+	pdps := make([][]*PosGroup, len(centers))
+	for i, c := range centers {
+		g := &PosGroup{Center: c, Group: []Pos{c}}
+		pdps[i] = []*PosGroup{g}
+	}
+	return NewPositionDetectionPattern(pdps)
+}
+
+// candidateNsByModule 依据定位符间距与给定模块尺寸估算二维码边长候选。
+func candidateNsByModule(pdp *PositionDetectionPatterns, moduleSize float64) []int {
+	if moduleSize <= 0 {
+		return nil
+	}
+	tl := pdp.TopLeft.Center
+	dRight := distance(tl, pdp.Right.Center)
+	dBottom := distance(tl, pdp.Bottom.Center)
+	avgDist := (dRight + dBottom) / 2
+	nEst := avgDist/moduleSize + 7
+	base := nearestValidN(int(math.Round(nEst)))
+	var result []int
+	for _, delta := range []int{0, -4, 4, -8, 8, -12, 12} {
+		n := base + delta
+		if n >= 17 && n <= 177 {
+			result = append(result, n)
+		}
+	}
+	return result
+}
+
+// medianFloat 返回中位数（偶数个时取较小者）。
+func medianFloat(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	sorted := append([]float64(nil), v...)
+	sort.Float64s(sorted)
+	return sorted[len(sorted)/2]
+}
+
+// invertGrid 逐像素取反二值网格，返回新网格。
+func invertGrid(g [][]bool) [][]bool {
+	out := make([][]bool, len(g))
+	for i, row := range g {
+		out[i] = make([]bool, len(row))
+		for j, v := range row {
+			out[i][j] = !v
+		}
+	}
+	return out
+}
+
+// sampleDark 采样并判断该坐标是否为深色模块。当二维码为反色（浅色模块深色
+// 背景）时，mx.invert 为 true，取反判定结果。
+func (mx *Matrix) sampleDark(x, y float64) bool {
+	dark := mx.sampleGray(x, y) < mx.threshold
+	if mx.invert {
+		return !dark
+	}
+	return dark
 }
 
 // sampleGray 在灰度图上做双线性插值采样，坐标越界时取最近边界像素。
@@ -963,9 +1238,9 @@ func (mx *Matrix) sampleAffine(pdp *PositionDetectionPatterns, n int) error {
 		dy := float64(row) - 3.0
 		for col := 0; col < n; col++ {
 			dx := float64(col) - 3.0
-			x := float64(tl.X) + dx*moduleSize*ux + dy*moduleSize*vx
-			y := float64(tl.Y) + dx*moduleSize*uy + dy*moduleSize*vy
-			line[col] = mx.sampleGray(x, y) < mx.threshold
+			x := (float64(tl.X) + dx*moduleSize*ux + dy*moduleSize*vx) * mx.sampleScale
+			y := (float64(tl.Y) + dx*moduleSize*uy + dy*moduleSize*vy) * mx.sampleScale
+			line[col] = mx.sampleDark(x, y)
 		}
 		mx.Points[row] = line
 	}
@@ -1006,7 +1281,8 @@ func (mx *Matrix) samplePerspective(pdp *PositionDetectionPatterns, n int, align
 			w := h[6]*u + h[7]*v + 1
 			x := (h[0]*u + h[1]*v + h[2]) / w
 			y := (h[3]*u + h[4]*v + h[5]) / w
-			line[col] = mx.sampleGray(x, y) < mx.threshold
+			// 单应在网格坐标系求解，乘 sampleScale 映射回全分辨率灰度图采样。
+			line[col] = mx.sampleDark(x*mx.sampleScale, y*mx.sampleScale)
 		}
 		mx.Points[row] = line
 	}
@@ -1018,10 +1294,83 @@ func (mx *Matrix) samplePerspective(pdp *PositionDetectionPatterns, n int, align
 func DecodeImg(img image.Image) (*Matrix, error) {
 	matrix := new(Matrix)
 	matrix.OrgImage = img
-
 	matrix.ReadImage()
+	// 采样缩放系数的默认值；decodeFromGrid 会按检测坐标系覆盖它。
+	matrix.sampleScale = 1
+	if err := matrix.detectAndDecode(); err != nil {
+		return nil, err
+	}
+	return matrix, nil
+}
 
-	groups := matrix.SplitGroups()
+// detectAndDecode 在大图上先尝试下采样检测以加速，再回退到全分辨率（含腐蚀
+// 重试）。成功后把内容写入 mx.Content。
+func (mx *Matrix) detectAndDecode() error {
+	// 大图：在下采样二值图上检测定位符，泛洪填充/二值化代价随之按 k² 下降；
+	// 最终模块仍从全分辨率灰度图采样。下采样失败则尝试腐蚀后的下采样，
+	// 最后回退到全分辨率，保证正确性。
+	if k := mx.downscaleFactor(); k > 1 {
+		small := downscaleBinary(mx.OrgPoints, k)
+		if err := mx.decodeFromGrid(small, float64(k)); err == nil {
+			return nil
+		}
+		for pass := 1; pass <= 2; pass++ {
+			eroded := erodeForeground(small, pass)
+			if err := mx.decodeFromGrid(eroded, float64(k)); err == nil {
+				return nil
+			}
+		}
+	}
+
+	// 全分辨率原始二值图。
+	if err := mx.decodeFromGrid(mx.OrgPoints, 1); err == nil {
+		return nil
+	}
+
+	// 真实场景照片（如屏幕翻拍）常带 1 像素噪声桥接，把定位符的 3x3 核心焊到
+	// 7x7 外环或把外环焊到相邻数据模块上，使 solid-in-hollow 检测不到 3 个定位符。
+	// 腐蚀可断开桥接；模块采样读灰度图而非 OrgPoints，故腐蚀不影响解码数据。
+	orgPoints := mx.OrgPoints
+	for pass := 1; pass <= 2; pass++ {
+		eroded := erodeForeground(orgPoints, pass)
+		if err := mx.decodeFromGrid(eroded, 1); err == nil {
+			return nil
+		}
+	}
+
+	// 圆点式/反色二维码（如艺术二维码）：连通分量法失效，改用扫描线法定位。
+	// 扫描线法只依赖黑白比例 1:1:3:1:1，不依赖连通分量与全局极性。
+	if err := mx.decodeScan(mx.OrgPoints, 1); err == nil {
+		return nil
+	}
+	return errors.New("unable to decode QR code")
+}
+
+// decodeScan 用扫描线法在 grid 上定位三个定位符，并据此采样解码。扫描线法没有
+// 连通分量的 solid 列表可用于查找对齐图案，因此先用三点仿射采样，靠 RS 纠错与
+// 候选版本校验选出正确结果。invert 极性由检测结果决定。
+func (mx *Matrix) decodeScan(grid [][]bool, scale float64) error {
+	pdp, invert, moduleSize, err := detectFinderScan(grid)
+	if err != nil {
+		return err
+	}
+	mx.invert = invert
+	mx.sampleScale = scale
+	for _, n := range candidateNsByModule(pdp, moduleSize) {
+		if err := mx.sampleAffine(pdp, n); err != nil {
+			continue
+		}
+		if err := decodeMatrix(mx); err == nil {
+			return nil
+		}
+	}
+	return errors.New("unable to decode QR code")
+}
+
+// decodeFromGrid 在二进制网格 grid 上完成定位符检测与逐版本采样解码。grid 的
+// 坐标系可能是下采样的，scale 为回到全分辨率的倍数；采样时坐标乘以 scale。
+func (mx *Matrix) decodeFromGrid(grid [][]bool, scale float64) error {
+	groups := splitGroups(grid)
 	// 判断空心
 	var hollow []*PosGroup
 	// 判断实心
@@ -1053,31 +1402,145 @@ func DecodeImg(img image.Image) (*Matrix, error) {
 	}
 	pdp, err := NewPositionDetectionPattern(positionDetectionPatterns)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	// 检测在 grid 坐标系内进行（版本 n 为维度量、面积与模块尺寸同比例自洽），
+	// 仅最终采样乘 scale 映射回全分辨率灰度图。
+	mx.sampleScale = scale
 	// 逐个候选边长采样，并以完整解码（含 RS 纠错）校验选出正确版本。
 	for _, n := range candidateNs(pdp) {
-		aligns := matrix.findAlignmentPatterns(pdp, solid, n)
+		aligns := mx.findAlignmentPatterns(pdp, solid, n)
 		if len(aligns) == 0 {
 			// version 1 无对齐图案，回退三点仿射。
-			if err := matrix.sampleGrid(pdp, n, nil); err != nil {
+			if err := mx.sampleGrid(pdp, n, nil); err != nil {
 				continue
 			}
-			if err := decodeMatrix(matrix); err == nil {
-				return matrix, nil
+			if err := decodeMatrix(mx); err == nil {
+				return nil
 			}
 			continue
 		}
 		for i := range aligns {
-			if err := matrix.sampleGrid(pdp, n, &aligns[i]); err != nil {
+			if err := mx.sampleGrid(pdp, n, &aligns[i]); err != nil {
 				continue
 			}
-			if err := decodeMatrix(matrix); err == nil {
-				return matrix, nil
+			if err := decodeMatrix(mx); err == nil {
+				return nil
 			}
 		}
 	}
-	return nil, errors.New("unable to decode QR code")
+	return errors.New("unable to decode QR code")
+}
+
+// erodeForeground 对前景（黑色）像素做 pass 轮 1 像素腐蚀：凡 8 邻域中存在
+// 白色像素的黑点即被置白，从而断开噪声形成的 1 像素桥接。返回新网格，
+// 不修改输入；行宽不规则时按最大宽度补齐。
+func erodeForeground(pts [][]bool, pass int) [][]bool {
+	h := len(pts)
+	if h == 0 {
+		return pts
+	}
+	w := 0
+	for _, row := range pts {
+		if len(row) > w {
+			w = len(row)
+		}
+	}
+	src := pts
+	for p := 0; p < pass; p++ {
+		dst := make([][]bool, h)
+		for y := 0; y < h; y++ {
+			dst[y] = make([]bool, w)
+			for x := 0; x < w; x++ {
+				if x >= len(src[y]) || !src[y][x] {
+					continue // 白色保持白色
+				}
+				bridge := false
+				for dy := -1; dy <= 1 && !bridge; dy++ {
+					ny := y + dy
+					if ny < 0 || ny >= h {
+						continue
+					}
+					for dx := -1; dx <= 1; dx++ {
+						nx := x + dx
+						if nx < 0 || nx >= w {
+							continue
+						}
+						if nx < len(src[ny]) && !src[ny][nx] {
+							bridge = true // 存在白色邻点 => 腐蚀该点
+							break
+						}
+					}
+				}
+				dst[y][x] = !bridge
+			}
+		}
+		src = dst
+	}
+	return src
+}
+
+// downscaleFactor 依据图像长边决定下采样倍数 k：小图直接全分辨率；大图把长边
+// 缩到约 1000px。下采样仅用于加速定位符检测，失败会自动回退全分辨率，故可适度
+// 激进。k 越大泛洪填充越快，但模块越难分辨，因此限制在 [1,4]。
+func (mx *Matrix) downscaleFactor() int {
+	w, h := mx.OrgSize.Dx(), mx.OrgSize.Dy()
+	maxDim := w
+	if h > maxDim {
+		maxDim = h
+	}
+	if maxDim <= 1000 {
+		return 1
+	}
+	f := maxDim/1000 + 1
+	if f > 4 {
+		f = 4
+	}
+	return f
+}
+
+// downscaleBinary 把二值图缩小 k 倍：每个下采样像素对应 k×k 块，块内只要有黑点
+// 即视为黑（等价于缩小后做一次膨胀），以尽量保留定位符等细结构。返回新网格，
+// 不修改输入；行宽不规则时按最大宽度补齐。
+func downscaleBinary(raw [][]bool, k int) [][]bool {
+	if k < 1 {
+		return raw
+	}
+	h := len(raw)
+	if h == 0 {
+		return raw
+	}
+	w := 0
+	for _, row := range raw {
+		if len(row) > w {
+			w = len(row)
+		}
+	}
+	sh := h / k
+	sw := w / k
+	out := make([][]bool, sh)
+	for y := 0; y < sh; y++ {
+		line := make([]bool, sw)
+		sy := y * k
+		for x := 0; x < sw; x++ {
+			sx := x * k
+			for j := 0; j < k; j++ {
+				ry := sy + j
+				if ry >= h {
+					break
+				}
+				for i := 0; i < k; i++ {
+					rx := sx + i
+					if rx < len(raw[ry]) && raw[ry][rx] {
+						line[x] = true
+						break
+					}
+				}
+			}
+		}
+		out[y] = line
+	}
+	return out
 }
 
 // decodeMatrix 对已采样的矩阵执行格式信息解析、去掩码、数据提取、RS 纠错与内容解码，

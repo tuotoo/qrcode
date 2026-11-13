@@ -98,37 +98,41 @@ func TestKanjiDecoder(t *testing.T) {
 	}
 }
 
+// decodeCases 是所有示例二维码的解码用例，供 TestDecode 与 BenchmarkDecode 复用。
+var decodeCases = []struct {
+	in, out string
+}{
+	{in: "qrcode.jpg", out: "http://www.imdb.com/title/tt2948356/"},
+	{in: "qrcode.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
+	{in: "qrcode1.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
+	{in: "qrcode4.png", out: "http://www.example.org"},
+	{in: "qrcode5.png", out: "a"},
+	{in: "qrcode6.png", out: "abcdefg"},
+	{in: "qrcode7.png", out: "abcdefg"},
+	{in: "qrcode8.png", out: "中文"},
+	{in: "qrcode9.png", out: "abcdefg"},
+	{in: "qrcode10.png", out: "abcdefghijklmnopqrstuvwxyz"},
+	{in: "qrcode11.png", out: `PProf是一个CPU分析器( cpu profiler)， 它是gperftools工具的一个组件， 由Google工程师为分析多线程的程序所开发。
+Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
+(译者注：不止这个包，runtime/pprof还可以为控制`},
+	{in: "qrcode12.png", out: `http://moet.jp/`},
+	{in: "qrcode13.png", out: `PProf是一个CPU分析器( cpu profiler)， 它是gperftools工具的一个组件， 由Google工程师为分析多线程的程序所开发。
+Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
+(译者注：不止这个包，runtime/pprof还可以为控制`},
+	{in: "qrcode14.jpeg", out: "AEL-10007-78402-01XXB45EBF1163C414B24AFD062B008024605AA3AB554463147C78A4B0ECA23B1DA8"},
+	{in: "qrcode15.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
+	{in: "qrcode16.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
+	{in: "qrcode17.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
+	{in: "qrcode18.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
+	{in: "qrcode19.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
+	{in: "qrcode20.png", out: "1234567890"},
+	{in: "qrcode21.png", out: "点"},
+	{in: "qrcode22.jpg", out: "84CB8BEX2446"},
+	{in: "qrcode23.png", out: "https://www.bilibili.com/video/BV1ZhWo6DEvt/"},
+}
+
 func TestDecode(t *testing.T) {
-	tests := []struct {
-		in, out string
-	}{
-		{in: "qrcode.jpg", out: "http://www.imdb.com/title/tt2948356/"},
-		{in: "qrcode.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
-		{in: "qrcode1.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
-		{in: "qrcode4.png", out: "http://www.example.org"},
-		{in: "qrcode5.png", out: "a"},
-		{in: "qrcode6.png", out: "abcdefg"},
-		{in: "qrcode7.png", out: "abcdefg"},
-		{in: "qrcode8.png", out: "中文"},
-		{in: "qrcode9.png", out: "abcdefg"},
-		{in: "qrcode10.png", out: "abcdefghijklmnopqrstuvwxyz"},
-		{in: "qrcode11.png", out: `PProf是一个CPU分析器( cpu profiler)， 它是gperftools工具的一个组件， 由Google工程师为分析多线程的程序所开发。
-Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
-(译者注：不止这个包，runtime/pprof还可以为控制`},
-		{in: "qrcode13.png", out: `PProf是一个CPU分析器( cpu profiler)， 它是gperftools工具的一个组件， 由Google工程师为分析多线程的程序所开发。
-Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
-(译者注：不止这个包，runtime/pprof还可以为控制`},
-		{in: "qrcode14.jpeg", out: "AEL-10007-78402-01XXB45EBF1163C414B24AFD062B008024605AA3AB554463147C78A4B0ECA23B1DA8"},
-		{in: "qrcode15.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
-		{in: "qrcode16.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
-		{in: "qrcode17.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
-		{in: "qrcode18.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
-		{in: "qrcode19.jpeg", out: "AEL-10007-78379-02XX524DBEEF63C414A830F3062A0047E2404ECEAF6E8C1DCCF9E0ED2484355C22EF"},
-		{in: "qrcode20.png", out: "1234567890"},
-		{in: "qrcode21.png", out: "点"},
-		{in: "qrcode22.jpg", out: "84CB8BEX2446"},
-	}
-	for _, tt := range tests {
+	for _, tt := range decodeCases {
 		f, err := os.Open(filepath.Join("example", tt.in))
 		if err != nil {
 			t.Fatal(tt.in, err)
