@@ -105,6 +105,8 @@ var decodeCases = []struct {
 	{in: "qrcode.jpg", out: "http://www.imdb.com/title/tt2948356/"},
 	{in: "qrcode.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
 	{in: "qrcode1.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
+	{in: "qrcode2.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
+	{in: "qrcode3.png", out: "https://login.weixin.qq.com/l/YeMV7-63bg=="},
 	{in: "qrcode4.png", out: "http://www.example.org"},
 	{in: "qrcode5.png", out: "a"},
 	{in: "qrcode6.png", out: "abcdefg"},
