@@ -102,8 +102,6 @@ func TestKanjiDecoder(t *testing.T) {
 var decodeCases = []struct {
 	in, out string
 }{
-	{in: "qrcode.jpg", out: "http://www.imdb.com/title/tt2948356/"},
-	{in: "qrcode.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
 	{in: "qrcode1.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
 	{in: "qrcode2.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
 	{in: "qrcode3.png", out: "https://login.weixin.qq.com/l/YeMV7-63bg=="},
@@ -131,6 +129,8 @@ Go标准库中的pprof package通过HTTP的方式为pprof工具提供数据。
 	{in: "qrcode21.png", out: "点"},
 	{in: "qrcode22.jpg", out: "84CB8BEX2446"},
 	{in: "qrcode23.png", out: "https://www.bilibili.com/video/BV1ZhWo6DEvt/"},
+	{in: "qrcode24.jpg", out: "http://www.imdb.com/title/tt2948356/"},
+	{in: "qrcode25.png", out: "http://weixin.qq.com/r/2fKmvj-EkmLtrXvd96fL"},
 }
 
 func TestDecode(t *testing.T) {

@@ -44,7 +44,7 @@ import (
 )
 
 func main() {
-	f, err := os.Open("qrcode.png")
+	f, err := os.Open("qrcode1.png")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -204,7 +204,7 @@ go get github.com/tuotoo/qrcode
 ### 用法
 
 ```go
-f, err := os.Open("qrcode.png")
+f, err := os.Open("qrcode1.png")
 if err != nil {
 	log.Fatal(err)
 }
