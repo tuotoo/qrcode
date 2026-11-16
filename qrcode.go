@@ -714,44 +714,54 @@ func (mx *Matrix) SplitGroups() [][]Pos {
 }
 
 // splitGroups performs an 8-neighbor flood fill on a binary grid, returning the
-// connected components as point lists. It copies the grid so the input is not
-// mutated, which lets it run on down-scaled or eroded grids.
+// connected components as point lists. The grid is copied into a zero-padded
+// flat buffer so the inner loop needs no bounds checks, and the input is never
+// mutated; that also lets it run on down-scaled or eroded grids.
 func splitGroups(grid [][]bool) [][]Pos {
-	m := make([][]bool, len(grid))
-	for i, row := range grid {
-		m[i] = make([]bool, len(row))
-		copy(m[i], row)
+	height := len(grid)
+	width := 0
+	for _, row := range grid {
+		if len(row) > width {
+			width = len(row)
+		}
 	}
-	height := len(m)
+	if height == 0 || width == 0 {
+		return nil
+	}
+
+	// One false border on each side makes every 8-neighbor offset safe.
+	stride := width + 2
+	m := make([]bool, (height+2)*stride)
+	for y, row := range grid {
+		copy(m[(y+1)*stride+1:], row)
+	}
+
+	neighbors := [8]int{-stride - 1, -stride, -stride + 1, -1, 1, stride - 1, stride, stride + 1}
 	var groups [][]Pos
-	// 内联 8 邻域泛洪填充：每个连通分量用独立切片做队列，避免逐像素调用
-	// SplitGroup 的函数与指针开销。
-	for y, line := range m {
-		for x, v := range line {
-			if !v {
+	var queue []int32
+	for y := 1; y <= height; y++ {
+		base := y * stride
+		for x := 1; x <= width; x++ {
+			start := base + x
+			if !m[start] {
 				continue
 			}
-			group := []Pos{{x, y}}
-			m[y][x] = false
-			for i := 0; i < len(group); i++ {
-				cx, cy := group[i].X, group[i].Y
-				for dy := -1; dy <= 1; dy++ {
-					ny := cy + dy
-					if ny < 0 || ny >= height {
-						continue
-					}
-					row := m[ny]
-					for dx := -1; dx <= 1; dx++ {
-						nx := cx + dx
-						if nx < 0 || nx >= len(row) {
-							continue
-						}
-						if row[nx] {
-							row[nx] = false
-							group = append(group, Pos{nx, ny})
-						}
+			m[start] = false
+			queue = queue[:0]
+			queue = append(queue, int32(start))
+			for i := 0; i < len(queue); i++ {
+				p := int(queue[i])
+				for _, d := range neighbors {
+					if n := p + d; m[n] {
+						m[n] = false
+						queue = append(queue, int32(n))
 					}
 				}
+			}
+			group := make([]Pos, len(queue))
+			for i, p := range queue {
+				pi := int(p)
+				group[i] = Pos{X: pi%stride - 1, Y: pi/stride - 1}
 			}
 			groups = append(groups, group)
 		}
@@ -763,22 +773,80 @@ func (mx *Matrix) ReadImage() {
 	mx.OrgSize = mx.OrgImage.Bounds()
 	width := mx.OrgSize.Dx()
 	height := mx.OrgSize.Dy()
-	pic := image.NewGray(mx.OrgSize)
-	draw.Draw(pic, mx.OrgSize, mx.OrgImage, mx.OrgImage.Bounds().Min, draw.Src)
+	pic := grayFromImage(mx.OrgImage)
 	threshold := mx.Binarization(pic)
 	mx.threshold = threshold
 	mx.grayPix = pic.Pix
+	mx.OrgPoints = make([][]bool, height)
 	for y := 0; y < height; y++ {
-		var line []bool
-		for x := 0; x < width; x++ {
-			if pic.Pix[y*width+x] < threshold {
-				line = append(line, true)
-			} else {
-				line = append(line, false)
+		row := pic.Pix[y*width : (y+1)*width]
+		line := make([]bool, width)
+		for x, v := range row {
+			line[x] = v < threshold
+		}
+		mx.OrgPoints[y] = line
+	}
+}
+
+// grayFromImage converts img to an 8-bit grayscale image with a zero-origin
+// rectangle. The concrete image types produced by the standard decoders get
+// direct pixel loops; anything else falls back to the generic draw path.
+func grayFromImage(img image.Image) *image.Gray {
+	b := img.Bounds()
+	width, height := b.Dx(), b.Dy()
+	dst := image.NewGray(image.Rect(0, 0, width, height))
+	switch src := img.(type) {
+	case *image.Gray:
+		for y := 0; y < height; y++ {
+			off := src.PixOffset(b.Min.X, b.Min.Y+y)
+			copy(dst.Pix[y*width:(y+1)*width], src.Pix[off:off+width])
+		}
+		return dst
+	case *image.YCbCr:
+		// JPEG decodes to YCbCr, whose Y plane is already the luminance.
+		for y := 0; y < height; y++ {
+			off := src.YOffset(b.Min.X, b.Min.Y+y)
+			copy(dst.Pix[y*width:(y+1)*width], src.Y[off:off+width])
+		}
+		return dst
+	case *image.RGBA:
+		// RGBA stores premultiplied channels, which is what luma expects.
+		for y := 0; y < height; y++ {
+			off := src.PixOffset(b.Min.X, b.Min.Y+y)
+			row := src.Pix[off : off+width*4]
+			for x := 0; x < width; x++ {
+				i := x * 4
+				dst.Pix[y*width+x] = luma8(row[i], row[i+1], row[i+2])
 			}
 		}
-		mx.OrgPoints = append(mx.OrgPoints, line)
+		return dst
+	case *image.NRGBA:
+		// NRGBA stores straight alpha, so premultiply before computing luma.
+		for y := 0; y < height; y++ {
+			off := src.PixOffset(b.Min.X, b.Min.Y+y)
+			row := src.Pix[off : off+width*4]
+			for x := 0; x < width; x++ {
+				i := x * 4
+				if a := row[i+3]; a == 0xff {
+					dst.Pix[y*width+x] = luma8(row[i], row[i+1], row[i+2])
+				} else {
+					r := uint8(uint16(row[i]) * uint16(a) / 0xff)
+					g := uint8(uint16(row[i+1]) * uint16(a) / 0xff)
+					bl := uint8(uint16(row[i+2]) * uint16(a) / 0xff)
+					dst.Pix[y*width+x] = luma8(r, g, bl)
+				}
+			}
+		}
+		return dst
+	default:
+		draw.Draw(dst, dst.Bounds(), img, b.Min, draw.Src)
+		return dst
 	}
+}
+
+// luma8 mirrors color.GrayModel's coefficients for 8-bit input.
+func luma8(r, g, b uint8) uint8 {
+	return uint8((19595*uint32(r) + 38470*uint32(g) + 7471*uint32(b) + 1<<15) >> 16)
 }
 
 // distance 返回两点间的欧氏距离。

@@ -137,10 +137,11 @@ Detection runs on a downscaled binary grid when the long edge exceeds ~1000 px
 grayscale image. This keeps large photos fast without sacrificing accuracy.
 
 End-to-end timings are dominated by image decoding (PNG inflate / JPEG), not by QR logic.
-When optimizing the library itself, benchmark `DecodeImg` to exclude that cost:
+Two benchmarks separate the layers:
 
 ```bash
-go test -run '^$' -bench . -benchmem
+go test -run '^$' -bench 'BenchmarkDecodeImg' -benchmem  # library only, image pre-decoded
+go test -run '^$' -bench 'BenchmarkDecode$' -benchmem    # full pipeline
 ```
 
 ## Testing
@@ -244,7 +245,8 @@ GIF/WebP/BMP 等格式请自行解码后再走 `DecodeImg`。
 
 ```bash
 go test ./...
-go test -run '^$' -bench . -benchmem   # 性能基准
+go test -run '^$' -bench 'BenchmarkDecodeImg' -benchmem   # 库自身耗时（预解码图像）
+go test -run '^$' -bench 'BenchmarkDecode$' -benchmem     # 端到端耗时
 ```
 
 `example/` 目录同时是回归测试集，预期内容见 `qrcode_test.go` 的 `decodeCases`。
